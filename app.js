@@ -1,760 +1,425 @@
-/* ==================== SECURITY MANAGER ==================== */
-class SecurityManager {
-    constructor() {
-        this.cryptoKey = null;
-        this.salt = null;
-    }
-
-    // Generate a random salt for key derivation
-    generateSalt() {
-        return window.crypto.getRandomValues(new Uint8Array(16));
-    }
-
-    // Generate a random IV for AES-GCM encryption
-    generateIV() {
-        return window.crypto.getRandomValues(new Uint8Array(12));
-    }
-
-    // Convert Uint8Array to Base64 string for storage
-    arrayBufferToBase64(buffer) {
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        return btoa(binary);
-    }
-
-    // Convert Base64 string back to Uint8Array
-    base64ToArrayBuffer(base64) {
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-        }
-        return bytes;
-    }
-
-    // Derive a CryptoKey from password using PBKDF2
-    async deriveKey(password, salt) {
-        const encoder = new TextEncoder();
-        const passwordKey = await window.crypto.subtle.importKey(
-            'raw',
-            encoder.encode(password),
-            'PBKDF2',
-            false,
-            ['deriveBits', 'deriveKey']
-        );
-
-        return await window.crypto.subtle.deriveKey(
-            {
-                name: 'PBKDF2',
-                salt: salt,
-                iterations: 100000,
-                hash: 'SHA-256'
-            },
-            passwordKey,
-            { name: 'AES-GCM', length: 256 },
-            true,
-            ['encrypt', 'decrypt']
-        );
-    }
-
-    // Create a password hash for verification (separate from encryption key)
-    async hashPassword(password, salt) {
-        const encoder = new TextEncoder();
-        const passwordKey = await window.crypto.subtle.importKey(
-            'raw',
-            encoder.encode(password),
-            'PBKDF2',
-            false,
-            ['deriveBits']
-        );
-
-        const bits = await window.crypto.subtle.deriveBits(
-            {
-                name: 'PBKDF2',
-                salt: salt,
-                iterations: 100000,
-                hash: 'SHA-256'
-            },
-            passwordKey,
-            256
-        );
-
-        return this.arrayBufferToBase64(bits);
-    }
-
-    // Encrypt data using AES-GCM
-    async encrypt(plaintext) {
-        if (!this.cryptoKey) {
-            throw new Error('Encryption key not initialized');
-        }
-
-        const encoder = new TextEncoder();
-        const iv = this.generateIV();
-        const encrypted = await window.crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv: iv },
-            this.cryptoKey,
-            encoder.encode(plaintext)
-        );
-
-        return {
-            ciphertext: this.arrayBufferToBase64(encrypted),
-            iv: this.arrayBufferToBase64(iv)
-        };
-    }
-
-    // Decrypt data using AES-GCM
-    async decrypt(encryptedData) {
-        if (!this.cryptoKey) {
-            throw new Error('Decryption key not initialized');
-        }
-
-        const decoder = new TextDecoder();
-        const iv = this.base64ToArrayBuffer(encryptedData.iv);
-        const ciphertext = this.base64ToArrayBuffer(encryptedData.ciphertext);
-
-        const decrypted = await window.crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv: iv },
-            this.cryptoKey,
-            ciphertext
-        );
-
-        return decoder.decode(decrypted);
-    }
-
-    // Initialize encryption with a password (for setup and unlock)
-    async initialize(password, storedSalt = null) {
-        this.salt = storedSalt || this.generateSalt();
-        this.cryptoKey = await this.deriveKey(password, this.salt);
-        return this.salt;
-    }
-
-    // Verify password against stored hash
-    async verifyPassword(password, storedHash, storedSalt) {
-        const salt = this.base64ToArrayBuffer(storedSalt);
-        const hash = await this.hashPassword(password, salt);
-        return hash === storedHash;
-    }
-
-    // Clear encryption key from memory (lock)
-    clear() {
-        this.cryptoKey = null;
-        this.salt = null;
-    }
-}
-
-/* ==================== DATABASE MANAGER ==================== */
-class DatabaseManager {
-    constructor() {
-        this.db = new Dexie('VaultBudgetDB');
-        this.db.version(1).stores({
-            settings: 'key',
-            categories: '++id',
-            transactions: '++id, categoryId'
-        });
-    }
-
-    // Settings
-    async getSetting(key) {
-        const result = await this.db.settings.get(key);
-        return result ? result.value : null;
-    }
-
-    async setSetting(key, value) {
-        await this.db.settings.put({ key, value });
-    }
-
-    // Categories
-    async addCategory(encryptedData) {
-        return await this.db.categories.add(encryptedData);
-    }
-
-    async getCategories() {
-        return await this.db.categories.toArray();
-    }
-
-    async updateCategory(id, encryptedData) {
-        await this.db.categories.update(id, encryptedData);
-    }
-
-    async deleteCategory(id) {
-        await this.db.categories.delete(id);
-        // Also delete associated transactions
-        await this.db.transactions.where('categoryId').equals(id).delete();
-    }
-
-    // Transactions
-    async addTransaction(encryptedData) {
-        return await this.db.transactions.add(encryptedData);
-    }
-
-    async getTransactions() {
-        return await this.db.transactions.toArray();
-    }
-
-    async updateTransaction(id, encryptedData) {
-        await this.db.transactions.update(id, encryptedData);
-    }
-
-    async deleteTransaction(id) {
-        await this.db.transactions.delete(id);
-    }
-
-    async getTransactionsByCategory(categoryId) {
-        return await this.db.transactions.where('categoryId').equals(categoryId).toArray();
-    }
-
-    // Reset all data
-    async resetDatabase() {
-        await this.db.delete();
-        this.db = new Dexie('VaultBudgetDB');
-        this.db.version(1).stores({
-            settings: 'key',
-            categories: '++id',
-            transactions: '++id, categoryId'
-        });
-    }
-}
-
-/* ==================== APPLICATION MANAGER ==================== */
+// Main Application Controller
 class App {
     constructor() {
-        this.security = new SecurityManager();
-        this.database = new DatabaseManager();
-        this.currentState = null;
-        this.decryptedCategories = [];
-        this.decryptedTransactions = [];
-        this.editingTransactionId = null;
-        this.editingCategoryId = null;
+        // Wait for dependencies to load
+        this.waitForDependencies().then(() => {
+            this.security = new SecurityManager();
+            this.db = new DatabaseManager();
+            this.csvImporter = new CSVImporter(this.security, this.db);
+            this.currentTab = 'transactions';
+            this.appState = 'loading';
+            this.activeMonth = new Date();
+            this.activeMonth.setDate(1);
+            
+            this.init();
+        });
+    }
 
-        this.init();
+    async waitForDependencies() {
+        return new Promise((resolve) => {
+            const checkDeps = setInterval(() => {
+                if (typeof Dexie !== 'undefined' && 
+                    typeof Papa !== 'undefined' && 
+                    typeof lucide !== 'undefined') {
+                    clearInterval(checkDeps);
+                    resolve();
+                }
+            }, 50);
+        });
     }
 
     async init() {
-        // Check if password is already set
-        const passwordHash = await this.database.getSetting('password_hash');
+        await this.checkAppState();
+        this.attachEventListeners();
+        this.render();
+    }
+
+    async checkAppState() {
+        const passwordHash = await this.db.getSetting('passwordHash');
         
         if (!passwordHash) {
-            this.showScreen('setup');
+            this.appState = 'setup';
         } else {
-            this.showScreen('locked');
-        }
-
-        this.attachEventListeners();
-        
-        // Initialize Lucide icons
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
+            this.appState = 'locked';
         }
     }
 
     attachEventListeners() {
         // Setup screen
-        document.getElementById('setup-submit')?.addEventListener('click', () => this.handleSetup());
-        document.getElementById('setup-password')?.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.handleSetup();
-        });
-
-        // Locked screen
-        document.getElementById('unlock-submit')?.addEventListener('click', () => this.handleUnlock());
-        document.getElementById('unlock-password')?.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.handleUnlock();
-        });
-
-        // Dashboard
-        document.getElementById('lock-btn')?.addEventListener('click', () => this.handleLock());
-        
-        // Tabs
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => this.switchTab(e.target.closest('.tab-btn').dataset.tab));
-        });
-
-        // Category actions
-        document.getElementById('add-category-btn')?.addEventListener('click', () => this.showCategoryModal());
-        document.getElementById('category-form')?.addEventListener('submit', (e) => this.handleCategorySubmit(e));
-
-        // Transaction actions
-        document.getElementById('add-transaction-btn')?.addEventListener('click', () => this.showTransactionModal());
-        document.getElementById('transaction-form')?.addEventListener('submit', (e) => this.handleTransactionSubmit(e));
-
-        // Settings actions
-        document.getElementById('export-btn')?.addEventListener('click', () => this.exportData());
-        document.getElementById('reset-btn')?.addEventListener('click', () => this.handleReset());
-
-        // Modal close buttons
-        document.querySelectorAll('.close-modal').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const modalId = e.target.closest('.close-modal').dataset.modal;
-                this.hideModal(modalId);
-            });
-        });
-
-        // Close modal on backdrop click
-        document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    this.hideModal(modal.id);
+        const setupBtn = document.getElementById('setup-submit');
+        if (setupBtn) {
+            setupBtn.addEventListener('click', async () => {
+                const password = document.getElementById('setup-password').value;
+                const confirm = document.getElementById('setup-password-confirm').value;
+                const errorEl = document.getElementById('setup-error');
+                
+                if (password !== confirm) {
+                    errorEl.textContent = 'Passwords do not match';
+                    errorEl.classList.remove('hidden');
+                    return;
                 }
+                
+                if (password.length < 8) {
+                    errorEl.textContent = 'Password must be at least 8 characters';
+                    errorEl.classList.remove('hidden');
+                    return;
+                }
+                
+                const { hash, salt } = await this.security.createPasswordHash(password);
+                await this.db.saveSetting('passwordHash', hash);
+                await this.db.saveSetting('passwordSalt', salt);
+                await this.security.initializeEncryption(password, salt);
+                
+                this.appState = 'unlocked';
+                this.render();
             });
-        });
-    }
-
-    showScreen(screen) {
-        this.currentState = screen;
-        document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
-        document.getElementById(`${screen}-screen`)?.classList.remove('hidden');
-    }
-
-    async handleSetup() {
-        const password = document.getElementById('setup-password').value;
-        const confirmPassword = document.getElementById('setup-password-confirm').value;
-        const errorEl = document.getElementById('setup-error');
-
-        errorEl.classList.add('hidden');
-
-        if (password.length < 8) {
-            errorEl.textContent = 'Password must be at least 8 characters';
-            errorEl.classList.remove('hidden');
-            return;
         }
 
-        if (password !== confirmPassword) {
-            errorEl.textContent = 'Passwords do not match';
-            errorEl.classList.remove('hidden');
-            return;
+        // Unlock screen
+        const unlockBtn = document.getElementById('unlock-submit');
+        if (unlockBtn) {
+            unlockBtn.addEventListener('click', async () => {
+                const password = document.getElementById('unlock-password').value;
+                const errorEl = document.getElementById('unlock-error');
+                
+                const storedHash = (await this.db.getSetting('passwordHash')).value;
+                const storedSalt = (await this.db.getSetting('passwordSalt')).value;
+                
+                const isValid = await this.security.verifyPassword(password, storedHash, storedSalt);
+                
+                if (!isValid) {
+                    errorEl.textContent = 'Incorrect password';
+                    errorEl.classList.remove('hidden');
+                    return;
+                }
+                
+                await this.security.initializeEncryption(password, storedSalt);
+                this.appState = 'unlocked';
+                this.render();
+            });
         }
 
-        try {
-            const salt = await this.security.initialize(password);
-            const passwordHash = await this.security.hashPassword(password, salt);
-            
-            await this.database.setSetting('password_hash', passwordHash);
-            await this.database.setSetting('password_salt', this.security.arrayBufferToBase64(salt));
-            
-            // Clear inputs
-            document.getElementById('setup-password').value = '';
-            document.getElementById('setup-password-confirm').value = '';
-            
-            this.showScreen('dashboard');
-            await this.loadDashboard();
-        } catch (error) {
-            errorEl.textContent = 'Setup failed. Please try again.';
-            errorEl.classList.remove('hidden');
-            console.error(error);
-        }
-    }
-
-    async handleUnlock() {
-        const password = document.getElementById('unlock-password').value;
-        const errorEl = document.getElementById('unlock-error');
-
-        errorEl.classList.add('hidden');
-
-        try {
-            const storedHash = await this.database.getSetting('password_hash');
-            const storedSalt = await this.database.getSetting('password_salt');
-
-            const isValid = await this.security.verifyPassword(password, storedHash, storedSalt);
-
-            if (!isValid) {
-                errorEl.textContent = 'Incorrect password';
-                errorEl.classList.remove('hidden');
-                return;
+        // Navigation
+        document.addEventListener('click', (e) => {
+            const navItem = e.target.closest('.nav-item');
+            if (navItem) {
+                document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+                navItem.classList.add('active');
+                this.currentTab = navItem.dataset.tab;
+                this.showTab(this.currentTab);
             }
+        });
 
-            const salt = this.security.base64ToArrayBuffer(storedSalt);
-            await this.security.initialize(password, salt);
+        // Month navigation
+        const prevMonth = document.getElementById('prev-month');
+        if (prevMonth) {
+            prevMonth.addEventListener('click', () => {
+                this.activeMonth.setMonth(this.activeMonth.getMonth() - 1);
+                this.renderBudgetView();
+            });
+        }
 
-            document.getElementById('unlock-password').value = '';
-            
-            this.showScreen('dashboard');
-            await this.loadDashboard();
-        } catch (error) {
-            errorEl.textContent = 'Unlock failed. Please try again.';
-            errorEl.classList.remove('hidden');
-            console.error(error);
+        const nextMonth = document.getElementById('next-month');
+        if (nextMonth) {
+            nextMonth.addEventListener('click', () => {
+                this.activeMonth.setMonth(this.activeMonth.getMonth() + 1);
+                this.renderBudgetView();
+            });
+        }
+
+        const returnToday = document.getElementById('return-today');
+        if (returnToday) {
+            returnToday.addEventListener('click', () => {
+                this.activeMonth = new Date();
+                this.activeMonth.setDate(1);
+                this.renderBudgetView();
+            });
+        }
+
+        // CSV Import
+        const importBtn = document.getElementById('import-csv-btn');
+        if (importBtn) {
+            importBtn.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.csv';
+                input.multiple = true;
+                input.onchange = async (e) => {
+                    const files = Array.from(e.target.files);
+                    const results = await this.csvImporter.processCSVFiles(files);
+                    this.showCSVReview(results);
+                };
+                input.click();
+            });
         }
     }
 
-    handleLock() {
-        this.security.clear();
-        this.decryptedCategories = [];
-        this.decryptedTransactions = [];
-        this.showScreen('locked');
-    }
-
-    async loadDashboard() {
-        await this.loadCategories();
-        await this.loadTransactions();
-        this.updateSummary();
-        this.renderCategories();
-        this.renderTransactions();
+    render() {
+        document.querySelectorAll('.screen').forEach(screen => screen.classList.add('hidden'));
+        
+        if (this.appState === 'setup') {
+            document.getElementById('setup-screen').classList.remove('hidden');
+        } else if (this.appState === 'locked') {
+            document.getElementById('locked-screen').classList.remove('hidden');
+        } else if (this.appState === 'unlocked') {
+            document.getElementById('dashboard-screen').classList.remove('hidden');
+            this.renderDashboard();
+        }
         
         if (typeof lucide !== 'undefined') {
             lucide.createIcons();
         }
     }
 
-    async loadCategories() {
-        const encrypted = await this.database.getCategories();
-        this.decryptedCategories = [];
+    async renderDashboard() {
+        this.showTab(this.currentTab);
+        await this.updateSummaryCards();
+    }
 
-        for (const cat of encrypted) {
-            try {
-                const name = await this.security.decrypt(JSON.parse(cat.encrypted_name));
-                const limit = await this.security.decrypt(JSON.parse(cat.encrypted_limit));
-                
-                this.decryptedCategories.push({
-                    id: cat.id,
-                    name,
-                    limit: parseFloat(limit)
-                });
-            } catch (error) {
-                console.error('Failed to decrypt category:', error);
+    showTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        const targetTab = document.getElementById(`tab-${tabName}`);
+        if (targetTab) {
+            targetTab.classList.add('active');
+        }
+        
+        if (tabName === 'budget') {
+            this.renderBudgetView();
+        } else if (tabName === 'transactions') {
+            this.renderTransactionsList();
+        } else if (tabName === 'mappings') {
+            this.renderMappingsView();
+        }
+    }
+
+    async updateSummaryCards() {
+        const categories = await this.db.getAllCategories();
+        let totalBudget = 0;
+        let totalSpent = 0;
+        
+        for (const cat of categories) {
+            if (cat.type !== 'Transfer') {
+                const limit = parseFloat(await this.security.decrypt(cat.encrypted_limit));
+                totalBudget += limit;
             }
         }
-    }
-
-    async loadTransactions() {
-        const encrypted = await this.database.getTransactions();
-        this.decryptedTransactions = [];
-
-        for (const tx of encrypted) {
-            try {
-                const date = await this.security.decrypt(JSON.parse(tx.encrypted_date));
-                const amount = await this.security.decrypt(JSON.parse(tx.encrypted_amount));
-                const note = tx.encrypted_note ? await this.security.decrypt(JSON.parse(tx.encrypted_note)) : '';
-                
-                this.decryptedTransactions.push({
-                    id: tx.id,
-                    date,
-                    amount: parseFloat(amount),
-                    categoryId: tx.categoryId,
-                    note
-                });
-            } catch (error) {
-                console.error('Failed to decrypt transaction:', error);
-            }
+        
+        const transactions = await this.db.getAllTransactions();
+        for (const t of transactions) {
+            const amount = parseFloat(await this.security.decrypt(t.encrypted_amount));
+            totalSpent += Math.abs(amount);
         }
-
-        // Sort by date descending
-        this.decryptedTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-    }
-
-    renderCategories() {
-        const container = document.getElementById('categories-list');
-        container.innerHTML = '';
-
-        if (this.decryptedCategories.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i data-lucide="folder"></i>
-                    <p>No categories yet. Add one to get started!</p>
-                </div>
-            `;
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-            return;
-        }
-
-        this.decryptedCategories.forEach(cat => {
-            const spent = this.decryptedTransactions
-                .filter(tx => tx.categoryId === cat.id)
-                .reduce((sum, tx) => sum + tx.amount, 0);
-            
-            const remaining = cat.limit - spent;
-            const percentage = (spent / cat.limit) * 100;
-
-            const item = document.createElement('div');
-            item.className = 'list-item';
-            item.innerHTML = `
-                <div class="list-item-content">
-                    <div class="list-item-title">${this.escapeHtml(cat.name)}</div>
-                    <div class="list-item-subtitle">
-                        $${spent.toFixed(2)} / $${cat.limit.toFixed(2)} 
-                        (${percentage.toFixed(0)}%)
-                    </div>
-                </div>
-                <div class="list-item-actions">
-                    <button class="icon-btn" onclick="app.editCategory(${cat.id})">
-                        <i data-lucide="edit-2"></i>
-                    </button>
-                    <button class="icon-btn" onclick="app.deleteCategory(${cat.id})">
-                        <i data-lucide="trash-2"></i>
-                    </button>
-                </div>
-            `;
-            container.appendChild(item);
-        });
-
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    renderTransactions() {
-        const container = document.getElementById('transactions-list');
-        container.innerHTML = '';
-
-        if (this.decryptedTransactions.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i data-lucide="receipt"></i>
-                    <p>No transactions yet. Add one to start tracking!</p>
-                </div>
-            `;
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-            return;
-        }
-
-        this.decryptedTransactions.forEach(tx => {
-            const category = this.decryptedCategories.find(c => c.id === tx.categoryId);
-            const categoryName = category ? category.name : 'Unknown';
-
-            const item = document.createElement('div');
-            item.className = 'list-item';
-            item.innerHTML = `
-                <div class="list-item-content">
-                    <div class="list-item-title">$${tx.amount.toFixed(2)}</div>
-                    <div class="list-item-subtitle">
-                        ${this.escapeHtml(categoryName)} • ${this.formatDate(tx.date)}
-                        ${tx.note ? `<br>${this.escapeHtml(tx.note)}` : ''}
-                    </div>
-                </div>
-                <div class="list-item-actions">
-                    <button class="icon-btn" onclick="app.deleteTransaction(${tx.id})">
-                        <i data-lucide="trash-2"></i>
-                    </button>
-                </div>
-            `;
-            container.appendChild(item);
-        });
-
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    updateSummary() {
-        const totalBudget = this.decryptedCategories.reduce((sum, cat) => sum + cat.limit, 0);
-        const totalSpent = this.decryptedTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-        const totalRemaining = totalBudget - totalSpent;
-
+        
         document.getElementById('total-budget').textContent = `$${totalBudget.toFixed(2)}`;
         document.getElementById('total-spent').textContent = `$${totalSpent.toFixed(2)}`;
-        document.getElementById('total-remaining').textContent = `$${totalRemaining.toFixed(2)}`;
+        document.getElementById('total-remaining').textContent = `$${(totalBudget - totalSpent).toFixed(2)}`;
     }
 
-    switchTab(tab) {
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    async renderBudgetView() {
+        const monthName = this.activeMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const monthDisplay = document.getElementById('current-month');
+        if (monthDisplay) {
+            monthDisplay.textContent = monthName;
+        }
         
-        document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-        document.getElementById(`tab-${tab}`).classList.add('active');
-    }
-
-    showCategoryModal(categoryId = null) {
-        this.editingCategoryId = categoryId;
-        const modal = document.getElementById('category-modal');
-        const title = document.getElementById('category-modal-title');
-        const form = document.getElementById('category-form');
-
-        if (categoryId) {
-            const category = this.decryptedCategories.find(c => c.id === categoryId);
-            title.textContent = 'Edit Category';
-            document.getElementById('category-name').value = category.name;
-            document.getElementById('category-limit').value = category.limit;
-        } else {
-            title.textContent = 'Add Category';
-            form.reset();
+        const isCurrentMonth = this.isCurrentMonth();
+        const todayBtn = document.getElementById('return-today');
+        if (todayBtn) {
+            todayBtn.classList.toggle('hidden', isCurrentMonth);
         }
-
-        modal.classList.remove('hidden');
-    }
-
-    showTransactionModal(transactionId = null) {
-        this.editingTransactionId = transactionId;
-        const modal = document.getElementById('transaction-modal');
-        const form = document.getElementById('transaction-form');
-        const categorySelect = document.getElementById('transaction-category');
-
-        // Populate category dropdown
-        categorySelect.innerHTML = '<option value="">Select category...</option>';
-        this.decryptedCategories.forEach(cat => {
-            const option = document.createElement('option');
-            option.value = cat.id;
-            option.textContent = cat.name;
-            categorySelect.appendChild(option);
+        
+        const categories = await this.db.getAllCategories();
+        const decryptedCategories = await Promise.all(
+            categories.map(async (cat) => ({
+                ...cat,
+                name: await this.security.decrypt(cat.encrypted_name),
+                limit: parseFloat(await this.security.decrypt(cat.encrypted_limit)),
+                type: cat.type || 'Expense'
+            }))
+        );
+        
+        const grouped = {
+            Income: [],
+            Expense: [],
+            Saving: [],
+            Transfer: []
+        };
+        
+        decryptedCategories.forEach(cat => {
+            grouped[cat.type].push(cat);
         });
-
-        if (transactionId) {
-            // Edit mode not implemented in this version
-            form.reset();
-        } else {
-            form.reset();
-            document.getElementById('transaction-date').valueAsDate = new Date();
-        }
-
-        modal.classList.remove('hidden');
-    }
-
-    hideModal(modalId) {
-        document.getElementById(modalId)?.classList.add('hidden');
-        this.editingCategoryId = null;
-        this.editingTransactionId = null;
-    }
-
-    async handleCategorySubmit(e) {
-        e.preventDefault();
-
-        const name = document.getElementById('category-name').value;
-        const limit = document.getElementById('category-limit').value;
-
-        try {
-            const encryptedName = await this.security.encrypt(name);
-            const encryptedLimit = await this.security.encrypt(limit);
-
-            if (this.editingCategoryId) {
-                await this.database.updateCategory(this.editingCategoryId, {
-                    encrypted_name: JSON.stringify(encryptedName),
-                    encrypted_limit: JSON.stringify(encryptedLimit)
-                });
-            } else {
-                await this.database.addCategory({
-                    encrypted_name: JSON.stringify(encryptedName),
-                    encrypted_limit: JSON.stringify(encryptedLimit)
-                });
+        
+        Object.keys(grouped).forEach(type => {
+            grouped[type].sort((a, b) => b.limit - a.limit);
+        });
+        
+        let html = '';
+        for (const type of ['Income', 'Expense', 'Saving', 'Transfer']) {
+            if (grouped[type].length === 0) continue;
+            
+            html += `<div class="budget-group"><div class="group-header">${type}</div>`;
+            
+            for (const cat of grouped[type]) {
+                const spent = await this.calculateCategorySpent(cat.id);
+                const isTransfer = cat.type === 'Transfer';
+                const percentage = cat.limit > 0 ? Math.min(100, (spent / cat.limit) * 100) : 0;
+                
+                html += `
+                    <div class="budget-item ${isTransfer ? 'transfer' : ''}">
+                        <div class="budget-header">
+                            <span class="category-name">${cat.name}</span>
+                            <span class="budget-amount">$${cat.limit.toFixed(2)}</span>
+                        </div>
+                        ${!isTransfer ? `
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${percentage}%"></div>
+                            </div>
+                            <div class="budget-footer">
+                                <span>Spent: $${spent.toFixed(2)}</span>
+                                <span>Remaining: $${(cat.limit - spent).toFixed(2)}</span>
+                            </div>
+                        ` : `
+                            <div class="transfer-note">Total: $${spent.toFixed(2)}</div>
+                        `}
+                    </div>
+                `;
             }
-
-            this.hideModal('category-modal');
-            await this.loadCategories();
-            this.renderCategories();
-            this.updateSummary();
-        } catch (error) {
-            console.error('Failed to save category:', error);
-            alert('Failed to save category');
+            
+            html += `</div>`;
+        }
+        
+        const budgetList = document.getElementById('budget-list');
+        if (budgetList) {
+            budgetList.innerHTML = html || '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No categories yet</p>';
         }
     }
 
-    async handleTransactionSubmit(e) {
-        e.preventDefault();
-
-        const date = document.getElementById('transaction-date').value;
-        const amount = document.getElementById('transaction-amount').value;
-        const categoryId = parseInt(document.getElementById('transaction-category').value);
-        const note = document.getElementById('transaction-note').value;
-
-        if (!categoryId) {
-            alert('Please select a category');
-            return;
+    async calculateCategorySpent(categoryId) {
+        const transactions = await this.db.getTransactionsByCategory(categoryId);
+        const monthKey = this.getMonthKey(this.activeMonth);
+        let total = 0;
+        
+        for (const t of transactions) {
+            const date = await this.security.decrypt(t.encrypted_date);
+            const transactionDate = new Date(date);
+            const tKey = this.getMonthKey(transactionDate);
+            
+            if (tKey === monthKey) {
+                const amount = parseFloat(await this.security.decrypt(t.encrypted_amount));
+                total += Math.abs(amount);
+            }
         }
-
-        try {
-            const encryptedDate = await this.security.encrypt(date);
-            const encryptedAmount = await this.security.encrypt(amount);
-            const encryptedNote = note ? await this.security.encrypt(note) : null;
-
-            await this.database.addTransaction({
-                encrypted_date: JSON.stringify(encryptedDate),
-                encrypted_amount: JSON.stringify(encryptedAmount),
-                categoryId: categoryId,
-                encrypted_note: encryptedNote ? JSON.stringify(encryptedNote) : null
-            });
-
-            this.hideModal('transaction-modal');
-            await this.loadTransactions();
-            this.renderTransactions();
-            this.updateSummary();
-            this.renderCategories(); // Update category spending
-        } catch (error) {
-            console.error('Failed to save transaction:', error);
-            alert('Failed to save transaction');
-        }
+        
+        return total;
     }
 
-    async deleteCategory(id) {
-        if (!confirm('Delete this category and all its transactions?')) return;
+    getMonthKey(date) {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    }
 
-        try {
-            await this.database.deleteCategory(id);
-            await this.loadCategories();
-            await this.loadTransactions();
-            this.renderCategories();
-            this.renderTransactions();
-            this.updateSummary();
-        } catch (error) {
-            console.error('Failed to delete category:', error);
+    isCurrentMonth() {
+        const now = new Date();
+        return this.getMonthKey(this.activeMonth) === this.getMonthKey(now);
+    }
+
+    async renderTransactionsList() {
+        const transactions = await this.db.getAllTransactions();
+        let html = '';
+        
+        if (transactions.length === 0) {
+            html = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No transactions yet</p>';
+        } else {
+            for (const t of transactions) {
+                const date = await this.security.decrypt(t.encrypted_date);
+                const amount = await this.security.decrypt(t.encrypted_amount);
+                const description = t.encrypted_description ? await this.security.decrypt(t.encrypted_description) : '';
+                
+                html += `
+                    <div class="budget-item">
+                        <div class="budget-header">
+                            <span>${description || 'Transaction'}</span>
+                            <span class="budget-amount">$${parseFloat(amount).toFixed(2)}</span>
+                        </div>
+                        <div class="review-meta">${date}</div>
+                    </div>
+                `;
+            }
         }
-    }
-
-    async editCategory(id) {
-        this.showCategoryModal(id);
-    }
-
-    async deleteTransaction(id) {
-        if (!confirm('Delete this transaction?')) return;
-
-        try {
-            await this.database.deleteTransaction(id);
-            await this.loadTransactions();
-            this.renderTransactions();
-            this.updateSummary();
-            this.renderCategories();
-        } catch (error) {
-            console.error('Failed to delete transaction:', error);
+        
+        const transactionsList = document.getElementById('transactions-list');
+        if (transactionsList) {
+            transactionsList.innerHTML = html;
         }
     }
 
-    async exportData() {
-        try {
-            const data = this.decryptedTransactions.map(tx => {
-                const category = this.decryptedCategories.find(c => c.id === tx.categoryId);
-                return {
-                    Date: tx.date,
-                    Amount: tx.amount,
-                    Category: category ? category.name : 'Unknown',
-                    Note: tx.note
-                };
-            });
-
-            const csv = Papa.unparse(data);
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `vault-budget-export-${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Export failed:', error);
-            alert('Failed to export data');
+    async renderMappingsView() {
+        const accountMappings = await this.db.getAllAccountMappings();
+        const descriptionMappings = await this.db.getAllDescriptionMappings();
+        
+        let html = '<h3>Account Mappings</h3><div class="list-container">';
+        
+        for (const mapping of accountMappings) {
+            const name = await this.security.decrypt(mapping.encrypted_name);
+            html += `
+                <div class="mapping-item">
+                    <span class="mapping-key">${mapping.account_number}</span>
+                    <span class="mapping-value">${name}</span>
+                    <button class="btn-delete" onclick="app.deleteAccountMapping('${mapping.account_number}')">
+                        <i data-lucide="trash-2"></i>
+                    </button>
+                </div>
+            `;
+        }
+        
+        html += '</div><h3>Description Mappings</h3><div class="list-container">';
+        
+        for (const mapping of descriptionMappings) {
+            const category = await this.security.decrypt(mapping.encrypted_category);
+            const payee = await this.security.decrypt(mapping.encrypted_payee);
+            html += `
+                <div class="mapping-item">
+                    <span class="mapping-key">${mapping.description}</span>
+                    <span class="mapping-value">Cat: ${category}, Payee: ${payee}</span>
+                    <button class="btn-delete" onclick="app.deleteDescriptionMapping('${mapping.description}')">
+                        <i data-lucide="trash-2"></i>
+                    </button>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        const mappingsList = document.getElementById('mappings-list');
+        if (mappingsList) {
+            mappingsList.innerHTML = html;
+        }
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
         }
     }
 
-    async handleReset() {
-        if (!confirm('This will delete ALL data permanently. Are you sure?')) return;
-        if (!confirm('Really sure? This cannot be undone!')) return;
-
-        try {
-            await this.database.resetDatabase();
-            this.security.clear();
-            this.decryptedCategories = [];
-            this.decryptedTransactions = [];
-            this.showScreen('setup');
-        } catch (error) {
-            console.error('Reset failed:', error);
-            alert('Failed to reset database');
-        }
+    async deleteAccountMapping(accountNumber) {
+        await this.db.deleteAccountMapping(accountNumber);
+        this.renderMappingsView();
     }
 
-    formatDate(dateStr) {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    async deleteDescriptionMapping(description) {
+        await this.db.deleteDescriptionMapping(description);
+        this.renderMappingsView();
     }
 
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    async showCSVReview(results) {
+        console.log('CSV Review:', results);
+        alert(`CSV Import: ${results.total} transactions found, ${results.duplicates} duplicates detected`);
     }
 }
 
 // Initialize app
-const app = new App();
+let app;
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        app = new App();
+    });
+} else {
+    app = new App();
+}

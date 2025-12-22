@@ -1,0 +1,12 @@
+{
+  "name": "Vault Budget",
+  "short_name": "Vault",
+  "description": "Secure, local-first budget tracking PWA",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#667eea",
+  "orientation": "portrait",
+  "icons": []
+}

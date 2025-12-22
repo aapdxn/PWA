@@ -59,7 +59,6 @@ class CSVImporter {
             const description = row.Description || row.description || '';
             const accountNumber = row['Account Number'] || row.account_number || '';
             
-            // Check for existing mappings
             const descMapping = await this.db.getDescriptionMapping(description);
             const acctMapping = await this.db.getAccountMapping(accountNumber);
             
@@ -78,7 +77,6 @@ class CSVImporter {
         const description = row.Description || row.description || '';
         const accountNumber = row['Account Number'] || row.account_number || '';
         
-        // Encrypt all fields
         return {
             encrypted_date: await this.security.encrypt(date),
             encrypted_amount: await this.security.encrypt(amount.toString()),
@@ -95,7 +93,6 @@ class CSVImporter {
             
             const transaction = await this.prepareTransaction(item.row);
             
-            // Apply category from mapping or manual selection
             if (item.categoryId) {
                 transaction.categoryId = item.categoryId;
             }
@@ -103,7 +100,6 @@ class CSVImporter {
             const id = await this.db.saveTransaction(transaction);
             saved.push(id);
             
-            // Save mapping if requested
             if (saveMappings && item.saveAsMapping) {
                 const description = item.row.Description || item.row.description || '';
                 await this.db.saveDescriptionMapping(

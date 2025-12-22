@@ -2,20 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-title" content="Vault Budget">
+    <meta name="theme-color" content="#667eea">
+    
     <title>Vault Budget</title>
     
-    <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="css/styles.css">
     
-    <!-- Stylesheet -->
-    <link rel="stylesheet" href="style.css">
-    
-    <!-- CDN Dependencies -->
+    <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/dexie@latest/dist/dexie.min.js"></script>
@@ -84,13 +83,19 @@
         <!-- STATE 3: UNLOCKED / DASHBOARD -->
         <div id="dashboard-screen" class="screen hidden">
             
-            <!-- Top Bar -->
-            <header class="top-bar">
-                <h1>Vault Budget</h1>
-                <button id="lock-btn" class="icon-btn" title="Lock">
-                    <i data-lucide="lock"></i>
-                </button>
-            </header>
+            <!-- Top Add Bar (60% width, centered) -->
+            <div class="add-bar">
+                <div class="add-bar-content">
+                    <button class="btn-add" id="add-transaction-btn">
+                        <i data-lucide="plus"></i>
+                        Add Transaction
+                    </button>
+                    <button class="btn-add" id="import-csv-btn">
+                        <i data-lucide="upload"></i>
+                        Import CSV
+                    </button>
+                </div>
+            </div>
             
             <!-- Main Content -->
             <main class="dashboard-content">
@@ -111,46 +116,37 @@
                     </div>
                 </div>
                 
-                <!-- Tabs -->
-                <div class="tabs">
-                    <button class="tab-btn active" data-tab="transactions">
-                        <i data-lucide="receipt"></i>
-                        <span>Transactions</span>
-                    </button>
-                    <button class="tab-btn" data-tab="categories">
-                        <i data-lucide="folder"></i>
-                        <span>Categories</span>
-                    </button>
-                    <button class="tab-btn" data-tab="settings">
-                        <i data-lucide="settings"></i>
-                        <span>Settings</span>
-                    </button>
-                </div>
-                
                 <!-- Tab Content: Transactions -->
                 <div id="tab-transactions" class="tab-content active">
                     <div class="section-header">
                         <h2>Transactions</h2>
-                        <button id="add-transaction-btn" class="btn-secondary">
-                            <i data-lucide="plus"></i>
-                            <span>Add</span>
-                        </button>
                     </div>
                     <div id="transactions-list" class="list-container">
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
                 
-                <!-- Tab Content: Categories -->
-                <div id="tab-categories" class="tab-content">
-                    <div class="section-header">
-                        <h2>Categories</h2>
-                        <button id="add-category-btn" class="btn-secondary">
-                            <i data-lucide="plus"></i>
-                            <span>Add</span>
+                <!-- Tab Content: Budget (formerly Categories) -->
+                <div id="tab-budget" class="tab-content">
+                    <div id="month-picker" class="month-picker">
+                        <button class="btn-month-nav" id="prev-month">
+                            <i data-lucide="chevron-left"></i>
                         </button>
+                        <span class="month-display" id="current-month">January 2025</span>
+                        <button class="btn-month-nav" id="next-month">
+                            <i data-lucide="chevron-right"></i>
+                        </button>
+                        <button class="btn-today" id="return-today">Today</button>
                     </div>
-                    <div id="categories-list" class="list-container">
+                    <div id="budget-list" class="budget-container">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Tab Content: Mappings -->
+                <div id="tab-mappings" class="tab-content">
+                    <h2>Manage Mappings</h2>
+                    <div id="mappings-list" class="mappings-container">
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
@@ -175,6 +171,26 @@
                 </div>
                 
             </main>
+            
+            <!-- Bottom Navigation -->
+            <nav class="bottom-nav">
+                <button class="nav-item active" data-tab="transactions">
+                    <i data-lucide="receipt"></i>
+                    <span>Transactions</span>
+                </button>
+                <button class="nav-item" data-tab="budget">
+                    <i data-lucide="wallet"></i>
+                    <span>Budget</span>
+                </button>
+                <button class="nav-item" data-tab="mappings">
+                    <i data-lucide="link"></i>
+                    <span>Mappings</span>
+                </button>
+                <button class="nav-item" data-tab="settings">
+                    <i data-lucide="settings"></i>
+                    <span>Settings</span>
+                </button>
+            </nav>
             
         </div>
         
@@ -245,22 +261,63 @@
         </div>
     </div>
     
+    <!-- Modal: CSV Review -->
+    <div id="csv-review-modal" class="modal hidden">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3>Review CSV Import</h3>
+                <button class="icon-btn close-modal" data-modal="csv-review-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div id="csv-review-content" class="modal-body">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+    
     <!-- Scripts -->
+    <script src="js/security-manager.js"></script>
+    <script src="js/database.js"></script>
+    <script src="js/csv-importer.js"></script>
     <script src="app.js"></script>
     <script>
-        // Initialize Lucide icons after DOM loads
+        // Initialize Lucide icons
         document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            } else {
+                console.error('❌ Lucide failed to load');
+            }
         });
         
         // Register Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => console.log('SW registered:', registration))
-                    .catch(error => console.log('SW registration failed:', error));
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => {
+                        console.log('✅ SW registered:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.error('❌ SW registration failed:', error);
+                    });
             });
         }
+        
+        // Verify critical dependencies loaded
+        window.addEventListener('load', () => {
+            const missing = [];
+            if (typeof Dexie === 'undefined') missing.push('Dexie.js');
+            if (typeof Papa === 'undefined') missing.push('PapaParse');
+            if (typeof lucide === 'undefined') missing.push('Lucide');
+            
+            if (missing.length > 0) {
+                console.error('⚠️ Failed to load:', missing.join(', '));
+                console.info('💡 Disable tracking prevention in browser settings');
+            } else {
+                console.log('✅ All dependencies loaded');
+            }
+        });
     </script>
 </body>
 </html>

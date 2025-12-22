@@ -1,12 +1,13 @@
 class DatabaseManager {
     constructor() {
         this.db = new Dexie('VaultBudget');
-        this.db.version(1).stores({
+        this.db.version(2).stores({
             settings: 'key',
             categories: '++id, type',
             transactions: '++id, categoryId, encrypted_date',
             mappings_accounts: 'account_number',
-            mappings_descriptions: 'description'
+            mappings_descriptions: 'description',
+            category_monthly_limits: '++id, categoryId, monthKey' // New table for month-specific limits
         });
     }
 
@@ -114,6 +115,45 @@ class DatabaseManager {
 
     async deleteDescriptionMapping(description) {
         return await this.db.mappings_descriptions.delete(description);
+    }
+
+    // Category Monthly Limits
+    async getCategoryMonthlyLimit(categoryId, monthKey) {
+        return await this.db.category_monthly_limits
+            .where(['categoryId', 'monthKey'])
+            .equals([categoryId, monthKey])
+            .first();
+    }
+
+    async saveCategoryMonthlyLimit(categoryId, monthKey, encryptedLimit) {
+        const existing = await this.getCategoryMonthlyLimit(categoryId, monthKey);
+        
+        if (existing) {
+            return await this.db.category_monthly_limits.put({
+                id: existing.id,
+                categoryId: categoryId,
+                monthKey: monthKey,
+                encrypted_limit: encryptedLimit
+            });
+        } else {
+            return await this.db.category_monthly_limits.add({
+                categoryId: categoryId,
+                monthKey: monthKey,
+                encrypted_limit: encryptedLimit
+            });
+        }
+    }
+
+    async getCategoryLimitForMonth(categoryId, monthKey) {
+        // Check for month-specific override first
+        const monthlyLimit = await this.getCategoryMonthlyLimit(categoryId, monthKey);
+        if (monthlyLimit) {
+            return monthlyLimit.encrypted_limit;
+        }
+        
+        // Fall back to default category limit
+        const category = await this.getCategory(categoryId);
+        return category ? category.encrypted_limit : null;
     }
 
     // Utility

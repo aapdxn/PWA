@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2.2.1'; // Increment version
+const CACHE_VERSION = 'v2.8.3'; // Incremented for bug fixes
 const CACHE_NAME = `vault-budget-${CACHE_VERSION}`;
 
 // Cache only local files that exist

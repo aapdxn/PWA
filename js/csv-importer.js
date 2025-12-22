@@ -72,10 +72,17 @@ class CSVImporter {
     }
 
     async prepareTransaction(row) {
-        const date = row['Transaction Date'] || row.date || '';
-        const amount = parseFloat(row.Amount || row.amount || 0);
-        const description = row.Description || row.description || '';
-        const accountNumber = row['Account Number'] || row.account_number || '';
+        // Normalize column names (case-insensitive)
+        const normalizedRow = {};
+        Object.keys(row).forEach(key => {
+            normalizedRow[key.toLowerCase().trim()] = row[key];
+        });
+        
+        // Support multiple column name variations
+        const date = normalizedRow['transaction date'] || normalizedRow['date'] || '';
+        const amount = parseFloat(normalizedRow['amount'] || 0);
+        const description = normalizedRow['description'] || '';
+        const accountNumber = normalizedRow['account number'] || normalizedRow['account_number'] || '';
         
         return {
             encrypted_date: await this.security.encrypt(date),
@@ -95,21 +102,63 @@ class CSVImporter {
             
             if (item.categoryId) {
                 transaction.categoryId = item.categoryId;
+                
+                // Apply sign based on category type
+                if (item.categoryType) {
+                    let amount = parseFloat(await this.security.decrypt(transaction.encrypted_amount));
+                    
+                    if (item.categoryType === 'Income') {
+                        amount = Math.abs(amount);
+                    } else if (item.categoryType === 'Expense' || item.categoryType === 'Saving') {
+                        amount = -Math.abs(amount);
+                    }
+                    
+                    transaction.encrypted_amount = await this.security.encrypt(amount.toString());
+                }
             }
             
             const id = await this.db.saveTransaction(transaction);
             saved.push(id);
             
             if (saveMappings && item.saveAsMapping) {
-                const description = item.row.Description || item.row.description || '';
-                await this.db.saveDescriptionMapping(
-                    description,
-                    await this.security.encrypt(item.categoryId.toString()),
-                    await this.security.encrypt(item.payee || '')
-                );
+                const normalizedRow = {};
+                Object.keys(item.row).forEach(key => {
+                    normalizedRow[key.toLowerCase().trim()] = item.row[key];
+                });
+                
+                const description = normalizedRow['description'] || '';
+                if (description && item.categoryId) {
+                    await this.db.saveDescriptionMapping(
+                        description,
+                        await this.security.encrypt(item.categoryId.toString()),
+                        await this.security.encrypt(item.payee || '')
+                    );
+                }
             }
         }
         
         return saved;
+    }
+
+    async importMappingsFromCSV(file) {
+        const rows = await this.parseCSV(file);
+        const imported = [];
+        
+        for (const row of rows) {
+            const description = row.Description || row.description || '';
+            const category = row.Category || row.category || '';
+            const payee = row.Payee || row.payee || '';
+            
+            if (description && category) {
+                await this.db.saveDescriptionMapping(
+                    description,
+                    await this.security.encrypt(category),
+                    await this.security.encrypt(payee)
+                );
+                imported.push({ description, category, payee });
+            }
+        }
+        
+        return imported;
     }
 }

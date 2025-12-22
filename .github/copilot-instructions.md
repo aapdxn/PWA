@@ -1,3 +1,4 @@
+````instructions
 # Copilot Instructions: Vault Budget (Secure, Local-First PWA)
 
 You are acting as a Senior Frontend Architect and Security Specialist. All code generated for this project must strictly adhere to these architectural and security constraints.
@@ -83,7 +84,132 @@ Whenever a bug is fixed or behavior is corrected, immediately document it here t
 - **Solution:** Store activeMonth as class property, not local variable.
 - **Prevention:** Use class-level state for all persistent UI state.
 
-### 6.2 PWA Refresh Strategy (Aggressive Update Mode)
+**Issue 7: Add Bar Visibility Toggle**
+- **Root Cause:** Add bar shown on all tabs instead of just Transactions.
+- **Solution:** Conditionally show/hide add bar in `showTab()` method based on active tab.
+- **Prevention:** Always check tab context before rendering contextual UI elements.
+
+**Issue 8: CSV Import Data Parsing**
+- **Root Cause:** Column names from CSV not matching expected field names (case sensitivity, spaces).
+- **Solution:** Normalize column headers and support multiple common variations.
+- **Prevention:** Use flexible column mapping that accounts for "Description" vs "description", "Transaction Date" vs "date", etc.
+
+**Issue 9: Income vs Expense Categorization**
+- **Root Cause:** All transactions treated as expenses (negative values).
+- **Solution:** Check category type (Income, Expense, Saving, Transfer) and adjust sign accordingly.
+- **Prevention:** Always apply sign logic based on category type when displaying amounts.
+
+**Issue 10: Bottom Navigation Scrolling Behavior**
+- **Root Cause:** Fixed positioning lost when scrolling on long pages.
+- **Solution:** Ensure bottom nav uses `position: fixed` with proper z-index and safe-area-insets.
+- **Prevention:** Test scrolling behavior on all tabs with extensive content.
+
+**Issue 11: Transaction Display Issues**
+- **Root Cause:** `encrypted_description` field not being populated during CSV import
+- **Solution:** Ensure CSV mapping includes description field in `prepareTransaction()` method
+- **Prevention:** Always test CSV import with sample data from reference folder
+
+**Issue 12: Fixed Summary Bar Scrolling**
+- **Root Cause:** Summary section scrolling with transaction list
+- **Solution:** Make summary section fixed position, only scroll transaction list container
+- **Prevention:** Use separate scroll containers for fixed headers and scrollable content
+
+**Issue 13: Import Mappings Button Not Working**
+- **Root Cause:** Event listener not properly attached in `renderMappingsView()`
+- **Solution:** Attach listener after button is rendered in DOM
+- **Prevention:** Always attach event listeners after dynamic HTML insertion
+
+**Issue 14: Single Category Chart Display**
+- **Root Cause:** Donut chart not rendering when only one category exists
+- **Solution:** Show full circle (360°) for single category instead of hiding chart
+- **Prevention:** Always handle edge cases in chart rendering logic
+
+**Issue 15: Summary Card Visibility**
+- **Root Cause:** Summary cards showing on all tabs
+- **Solution:** Only show summary cards on budget tab using conditional rendering
+- **Prevention:** Check active tab before rendering context-specific UI elements
+
+**Issue 16: Budget Page Layout Inconsistency**
+- **Root Cause:** Budget categories using different card styling than transactions
+- **Solution:** Unified card design with consistent spacing, typography, and interaction states
+- **Prevention:** Maintain consistent `.category-card` class styling across all views
+
+**Issue 17: Edit and Delete Functionality**
+- **Root Cause:** No way to edit or delete existing records
+- **Solution:** Click-to-edit on transactions and categories, with delete buttons in edit modals
+- **Prevention:** Always provide CRUD operations for user-created data
+
+**Issue 18: Category Deletion with Transactions**
+- **Root Cause:** Deleting categories would orphan transactions
+- **Solution:** Migration modal to reassign transactions before category deletion
+- **Prevention:** Always check for related data before allowing deletion
+
+**Issue 19: Month-Specific Category Budgets**
+- **Root Cause:** Editing category budget changed all months simultaneously
+- **Solution:** Prompt user to apply change to "This Month Only" or "This and Future Months"
+- **Prevention:** Always consider temporal scope when editing recurring financial data
+
+**Issue 20: Budget Stats Display**
+- **Root Cause:** "Spent" terminology confusing when showing tracked amounts
+- **Solution:** Show "Tracked" vs "Remaining/Excess" with color coding (green for income surplus, red for overspending)
+- **Prevention:** Use contextually appropriate financial terminology
+
+**Issue 21: JavaScript Syntax Error in Migration Modal**
+- **Root Cause:** Missing variable declaration in `showCategoryMigrationModal` method
+- **Solution:** Properly declare modal variable and check for null before manipulating
+- **Prevention:** Always use `let` or `const` for variable declarations, avoid implicit globals
+
+**Issue 22: CSS Vendor Prefix Warnings**
+- **Root Cause:** Missing vendor prefixes for webkit properties in Safari
+- **Solution:** Add `-webkit-` prefixes for `text-size-adjust` and `backdrop-filter`
+- **Prevention:** Always include vendor prefixes for properties that require them in Safari
+
+**Issue 23: Viewport Meta Tag Compatibility Warnings**
+- **Root Cause:** `maximum-scale` and `user-scalable` attributes flagged as compatibility issues in modern browsers
+- **Solution:** Remove these attributes - iOS Safari respects initial-scale alone for PWAs in standalone mode
+- **Prevention:** Use minimal viewport meta tag for PWA: `width=device-width, initial-scale=1.0`
+
+**Issue 24: Theme-Color and Text-Size-Adjust Browser Warnings**
+- **Root Cause:** Firefox doesn't support `theme-color` meta tag, Safari needs webkit prefix for text-size-adjust
+- **Solution:** These are non-critical warnings - keep for iOS/Chrome compatibility, ignore Firefox warnings
+- **Prevention:** Accept that some CSS/meta features are browser-specific and won't work everywhere
+
+**Issue 25: Missing Autocomplete Attribute Warning**
+- **Root Cause:** Form inputs without `autocomplete` attribute trigger accessibility warnings
+- **Solution:** Add appropriate autocomplete values to all form inputs (e.g., `autocomplete="off"` for password fields)
+- **Prevention:** Always include autocomplete attribute on input elements for better UX and accessibility
+
+**Issue 26: Category Management Implementation**
+- **Root Cause:** No CRUD interface for budget categories
+- **Solution:** Added full category management (create, read, update, delete) with encrypted storage
+- **Prevention:** Always implement complete CRUD operations for core data entities
+
+**Issue 27: Transaction Management Implementation**
+- **Root Cause:** No manual transaction entry capability
+- **Solution:** Added full transaction CRUD with category-aware amount signing
+- **Prevention:** Always implement manual entry alongside import features
+
+**Issue 28: Summary Cards Visibility Scope**
+- **Root Cause:** Summary cards showing on all tabs (duplicate of Issue 15)
+- **Solution:** Added conditional show/hide in showTab() method based on active tab
+- **Prevention:** Always scope contextual UI elements to specific tabs/views
+
+**Issue 29: Summary Analytics Implementation**
+- **Root Cause:** No summary page or budget overview cards
+- **Solution:** Added summary cards (Income/Expenses/Savings) and Summary tab with top category breakdowns
+- **Prevention:** Always provide analytics/reporting features for financial data
+
+**Issue 30: Missing Method Definitions Causing SyntaxError**
+- **Root Cause:** Event listeners referencing methods that weren't defined in the class, causing "Unexpected end of input" at closing brace
+- **Solution:** Always ensure all methods called in event listeners are defined before closing the class
+- **Prevention:** When adding event listeners, immediately add corresponding method stubs; use a checklist to verify all referenced methods exist
+
+**Issue 31: File Size Management for Large Classes**
+- **Root Cause:** Large monolithic class files become difficult to process and prone to incomplete modifications
+- **Solution:** Split large classes into logical method groups; use helper methods to break down complex operations
+- **Prevention:** Keep methods focused and single-purpose; extract complex logic into separate helper methods; aim for methods under 50 lines
+
+## 6.2 PWA Refresh Strategy (Aggressive Update Mode)
 
 All Service Worker updates must use the following aggressive strategy to ensure immediate code deployment:
 
@@ -131,6 +257,27 @@ navigator.serviceWorker.register('sw.js')
   - MAJOR: Breaking changes to data structure or security model.
   - MINOR: New features (CSV import, new tabs, etc.).
   - PATCH: Bug fixes, style tweaks, minor refactors.
+
+**Current Cache Version:** `v2.8.3`
+- **Last Updated:** 2025-01-XX
+- **Next Version:** `v2.8.4` (for next change)
+
+**Quick Cache Clear Command:**
+```javascript
+navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister())); caches.keys().then(k => k.forEach(c => caches.delete(c))); location.reload();
+```
+
+**Step-by-Step Clear:**
+```javascript
+// 1. Unregister service workers
+navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
+
+// 2. Clear all caches
+caches.keys().then(k => k.forEach(c => caches.delete(c)));
+
+// 3. Hard reload
+location.reload();
+```
 
 ### 6.3 Validation First Protocol
 
@@ -248,9 +395,23 @@ Perform these checks at least monthly:
 
 ---
 
+## 7. Reference Data Handling
+
+- **Folder:** `/docs/reference-csvs` contains sample CSV files.
+- **Rule:** These files are for structure and mapping reference ONLY.
+- **Usage:** Use the headers and data formats in these CSVs to build the `PapaParse` mapping logic. NEVER attempt to modify these files or include them in the PWA's build/deployment.
+- **CSV Column Mapping:**
+  - **Transactions:** Support variations like "Transaction Date" OR "date", "Description" OR "description", "Amount" OR "amount", "Account Number" OR "account_number"
+  - **Mappings:** Headers are "Description", "Payee", "Category"
+- **Case Sensitivity:** Always normalize column names to lowercase for comparison.
+
 ## Change Log
 
+- **2025-01-XX:** Added Issue 7-10 to Section 6.1.
+- **2025-01-XX:** Added current cache version tracking and quick clear command.
+- **2025-01-XX:** Added Section 7 - Reference Data Handling.
 - **2025-01-XX:** Added Section 6 - Continuous Learning & Troubleshooting.
 - **2025-01-XX:** Updated Section 3 with mappings tables and type field.
 - **2025-01-XX:** Updated Section 4 with new navigation structure.
 - **2025-01-XX:** Updated Section 5 with explicit file structure rules.
+````

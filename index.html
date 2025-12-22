@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <title>Vault Budget</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- CDN Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div id="app">
+        
+        <!-- STATE 1: FIRST RUN / SETUP -->
+        <div id="setup-screen" class="screen hidden">
+            <div class="screen-content">
+                <div class="logo-container">
+                    <i data-lucide="shield-check" class="logo-icon"></i>
+                    <h1>Vault Budget</h1>
+                    <p class="subtitle">Secure. Private. Yours.</p>
+                </div>
+                
+                <div class="form-container">
+                    <h2>Create Master Password</h2>
+                    <p class="info-text">This password encrypts all your data. Choose wisely—it cannot be recovered.</p>
+                    
+                    <div class="input-group">
+                        <label for="setup-password">Master Password</label>
+                        <input type="password" id="setup-password" placeholder="Enter strong password" autocomplete="new-password">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="setup-password-confirm">Confirm Password</label>
+                        <input type="password" id="setup-password-confirm" placeholder="Re-enter password" autocomplete="new-password">
+                    </div>
+                    
+                    <button id="setup-submit" class="btn-primary">
+                        <i data-lucide="lock"></i>
+                        <span>Secure My Vault</span>
+                    </button>
+                    
+                    <div id="setup-error" class="error-message hidden"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- STATE 2: LOCKED -->
+        <div id="locked-screen" class="screen hidden">
+            <div class="screen-content">
+                <div class="logo-container">
+                    <i data-lucide="lock" class="logo-icon"></i>
+                    <h1>Vault Budget</h1>
+                    <p class="subtitle">Enter password to unlock</p>
+                </div>
+                
+                <div class="form-container">
+                    <div class="input-group">
+                        <label for="unlock-password">Master Password</label>
+                        <input type="password" id="unlock-password" placeholder="Enter password" autocomplete="current-password">
+                    </div>
+                    
+                    <button id="unlock-submit" class="btn-primary">
+                        <i data-lucide="unlock"></i>
+                        <span>Unlock</span>
+                    </button>
+                    
+                    <div id="unlock-error" class="error-message hidden"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- STATE 3: UNLOCKED / DASHBOARD -->
+        <div id="dashboard-screen" class="screen hidden">
+            
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <h1>Vault Budget</h1>
+                <button id="lock-btn" class="icon-btn" title="Lock">
+                    <i data-lucide="lock"></i>
+                </button>
+            </header>
+            
+            <!-- Main Content -->
+            <main class="dashboard-content">
+                
+                <!-- Summary Cards -->
+                <div class="summary-section">
+                    <div class="summary-card">
+                        <div class="summary-label">Total Budget</div>
+                        <div class="summary-value" id="total-budget">$0.00</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Spent</div>
+                        <div class="summary-value" id="total-spent">$0.00</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Remaining</div>
+                        <div class="summary-value" id="total-remaining">$0.00</div>
+                    </div>
+                </div>
+                
+                <!-- Tabs -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="transactions">
+                        <i data-lucide="receipt"></i>
+                        <span>Transactions</span>
+                    </button>
+                    <button class="tab-btn" data-tab="categories">
+                        <i data-lucide="folder"></i>
+                        <span>Categories</span>
+                    </button>
+                    <button class="tab-btn" data-tab="settings">
+                        <i data-lucide="settings"></i>
+                        <span>Settings</span>
+                    </button>
+                </div>
+                
+                <!-- Tab Content: Transactions -->
+                <div id="tab-transactions" class="tab-content active">
+                    <div class="section-header">
+                        <h2>Transactions</h2>
+                        <button id="add-transaction-btn" class="btn-secondary">
+                            <i data-lucide="plus"></i>
+                            <span>Add</span>
+                        </button>
+                    </div>
+                    <div id="transactions-list" class="list-container">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Tab Content: Categories -->
+                <div id="tab-categories" class="tab-content">
+                    <div class="section-header">
+                        <h2>Categories</h2>
+                        <button id="add-category-btn" class="btn-secondary">
+                            <i data-lucide="plus"></i>
+                            <span>Add</span>
+                        </button>
+                    </div>
+                    <div id="categories-list" class="list-container">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Tab Content: Settings -->
+                <div id="tab-settings" class="tab-content">
+                    <h2>Settings</h2>
+                    <div class="settings-section">
+                        <button id="export-btn" class="btn-secondary full-width">
+                            <i data-lucide="download"></i>
+                            <span>Export Data (CSV)</span>
+                        </button>
+                        <button id="change-password-btn" class="btn-secondary full-width">
+                            <i data-lucide="key"></i>
+                            <span>Change Master Password</span>
+                        </button>
+                        <button id="reset-btn" class="btn-danger full-width">
+                            <i data-lucide="trash-2"></i>
+                            <span>Reset All Data</span>
+                        </button>
+                    </div>
+                </div>
+                
+            </main>
+            
+        </div>
+        
+    </div>
+    
+    <!-- Modal: Add/Edit Transaction -->
+    <div id="transaction-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="transaction-modal-title">Add Transaction</h3>
+                <button class="icon-btn close-modal" data-modal="transaction-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form id="transaction-form">
+                <div class="input-group">
+                    <label for="transaction-date">Date</label>
+                    <input type="date" id="transaction-date" required>
+                </div>
+                <div class="input-group">
+                    <label for="transaction-amount">Amount</label>
+                    <input type="number" id="transaction-amount" step="0.01" placeholder="0.00" required>
+                </div>
+                <div class="input-group">
+                    <label for="transaction-category">Category</label>
+                    <select id="transaction-category" required>
+                        <option value="">Select category...</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="transaction-note">Note (optional)</label>
+                    <textarea id="transaction-note" rows="2" placeholder="Add a note..."></textarea>
+                </div>
+                <div id="custom-fields-container">
+                    <!-- Dynamic custom fields populated here -->
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary close-modal" data-modal="transaction-modal">Cancel</button>
+                    <button type="submit" class="btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal: Add/Edit Category -->
+    <div id="category-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="category-modal-title">Add Category</h3>
+                <button class="icon-btn close-modal" data-modal="category-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form id="category-form">
+                <div class="input-group">
+                    <label for="category-name">Category Name</label>
+                    <input type="text" id="category-name" placeholder="e.g., Groceries" required>
+                </div>
+                <div class="input-group">
+                    <label for="category-limit">Monthly Limit</label>
+                    <input type="number" id="category-limit" step="0.01" placeholder="0.00" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary close-modal" data-modal="category-modal">Cancel</button>
+                    <button type="submit" class="btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="app.js"></script>
+    <script>
+        // Initialize Lucide icons after DOM loads
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+        
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => console.log('SW registered:', registration))
+                    .catch(error => console.log('SW registration failed:', error));
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,16 +1,28 @@
-const CACHE_VERSION = 'v2.8.3'; // Incremented for bug fixes
+const CACHE_VERSION = 'v2.23.7'; // CSV import now a dedicated page; Fixed search indexing bug
 const CACHE_NAME = `vault-budget-${CACHE_VERSION}`;
 
 // Cache only local files that exist
 const urlsToCache = [
-    './',
-    './index.html',
-    './css/styles.css',
-    './app.js',
-    './js/security-manager.js',
-    './js/database.js',
-    './js/csv-importer.js',
-    './manifest.json'
+    '/',
+    '/index.html',
+    '/main.js',
+    '/js/security.js',
+    '/js/database.js',
+    '/js/csv-importer.js',
+    '/js/ui.js',
+    '/js/ui/auth-ui.js',
+    '/js/ui/transaction-ui.js',
+    '/js/ui/budget-ui.js',
+    '/js/ui/summary-ui.js',
+    '/css/base.css',
+    '/css/components.css',
+    '/css/layout.css',
+    '/css/pages.css',
+    '/css/utilities.css',
+    '/manifest.json',
+    'https://unpkg.com/dexie@3.2.4/dist/dexie.min.js',
+    'https://unpkg.com/lucide@latest',
+    'https://unpkg.com/papaparse@5.4.1/papaparse.min.js'
 ];
 
 // Install event

@@ -1,83 +1,16 @@
-// Main Application Controller
-class App {
-    constructor() {
-        console.log('🚀 App constructor called');
-        
-        // Wait for dependencies to load
-        this.waitForDependencies().then(() => {
-            console.log('✅ Dependencies loaded, initializing app...');
-            this.security = new SecurityManager();
-            this.db = new DatabaseManager();
-            this.csvImporter = new CSVImporter(this.security, this.db);
-            this.currentTab = 'transactions';
-            this.appState = 'loading';
-            this.activeMonth = new Date();
-            this.activeMonth.setDate(1);
-            
-            this.init();
-        }).catch(error => {
-            console.error('❌ Dependency loading failed:', error);
-        });
+// UIManager - Handles ALL UI rendering, event handling, and user interactions
+// Uses global lucide for icons (loaded via CDN)
+export class UIManager {
+    constructor(security, db, csvEngine) {
+        this.security = security;
+        this.db = db;
+        this.csvEngine = csvEngine;
+        this.currentTab = 'transactions';
+        this.activeMonth = new Date();
+        this.activeMonth.setDate(1);
     }
 
-    async waitForDependencies() {
-        return new Promise((resolve) => {
-            let attempts = 0;
-            const maxAttempts = 50;
-            
-            const checkDeps = setInterval(() => {
-                attempts++;
-                
-                if (typeof Dexie !== 'undefined' && 
-                    typeof Papa !== 'undefined' && 
-                    typeof lucide !== 'undefined') {
-                    clearInterval(checkDeps);
-                    console.log('✅ All dependencies ready');
-                    resolve();
-                } else if (attempts >= maxAttempts) {
-                    clearInterval(checkDeps);
-                    console.error('⚠️ Timeout waiting for dependencies');
-                    console.log('Dexie:', typeof Dexie);
-                    console.log('Papa:', typeof Papa);
-                    console.log('Lucide:', typeof lucide);
-                    resolve(); // Resolve anyway to continue
-                }
-            }, 100);
-        });
-    }
-
-    async init() {
-        console.log('📱 Initializing app...');
-        
-        try {
-            await this.checkAppState();
-            console.log('📊 App state:', this.appState);
-            
-            this.attachEventListeners();
-            this.render();
-            
-            console.log('✅ App initialized successfully');
-        } catch (error) {
-            console.error('❌ App initialization failed:', error);
-        }
-    }
-
-    async checkAppState() {
-        try {
-            const passwordHash = await this.db.getSetting('passwordHash');
-            
-            if (!passwordHash) {
-                console.log('🔓 No password found - showing setup screen');
-                this.appState = 'setup';
-            } else {
-                console.log('🔒 Password exists - showing locked screen');
-                this.appState = 'locked';
-            }
-        } catch (error) {
-            console.error('Error checking app state:', error);
-            this.appState = 'setup'; // Default to setup on error
-        }
-    }
+    // ========== Core State Management ==========
 
     attachEventListeners() {
         console.log('🔗 Attaching event listeners...');
@@ -221,6 +154,8 @@ class App {
         console.log('✅ Event listeners attached');
     }
 
+    // ========== Auth Handlers ==========
+
     async handleSetupSubmit() {
         console.log('📝 Processing setup...');
         
@@ -256,13 +191,12 @@ class App {
             console.log('🔓 Initializing encryption...');
             await this.security.initializeEncryption(password, salt);
             
-            this.appState = 'unlocked';
-            this.render();
-            console.log('✅ Setup complete!');
+            return { success: true };
         } catch (error) {
             console.error('❌ Setup failed:', error);
             errorEl.textContent = 'Setup failed: ' + error.message;
             errorEl.classList.remove('hidden');
+            return { success: false };
         }
     }
 
@@ -274,7 +208,7 @@ class App {
         
         if (!password) {
             console.log('❌ No password entered');
-            return;
+            return { success: false };
         }
         
         try {
@@ -287,59 +221,22 @@ class App {
             if (!isValid) {
                 errorEl.textContent = 'Incorrect password';
                 errorEl.classList.remove('hidden');
-                return;
+                return { success: false };
             }
             
             console.log('✅ Password correct, unlocking...');
             await this.security.initializeEncryption(password, storedSalt);
             
-            this.appState = 'unlocked';
-            this.render();
-            console.log('✅ Unlocked!');
+            return { success: true };
         } catch (error) {
             console.error('❌ Unlock failed:', error);
             errorEl.textContent = 'Unlock failed: ' + error.message;
             errorEl.classList.remove('hidden');
+            return { success: false };
         }
     }
 
-    render() {
-        console.log('🎨 Rendering app state:', this.appState);
-        
-        // Hide all screens
-        document.querySelectorAll('.screen').forEach(screen => {
-            screen.classList.add('hidden');
-        });
-        
-        // Show appropriate screen
-        if (this.appState === 'setup') {
-            const setupScreen = document.getElementById('setup-screen');
-            if (setupScreen) {
-                setupScreen.classList.remove('hidden');
-                console.log('✅ Showing setup screen');
-            }
-        } else if (this.appState === 'locked') {
-            const lockedScreen = document.getElementById('locked-screen');
-            if (lockedScreen) {
-                lockedScreen.classList.remove('hidden');
-                console.log('✅ Showing locked screen');
-            }
-        } else if (this.appState === 'unlocked') {
-            const dashboardScreen = document.getElementById('dashboard-screen');
-            if (dashboardScreen) {
-                dashboardScreen.classList.remove('hidden');
-                console.log('✅ Showing dashboard screen');
-                
-                // Initialize the first tab
-                this.showTab(this.currentTab);
-            }
-        }
-        
-        // Reinitialize Lucide icons
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-    }
+    // ========== Tab Navigation ==========
 
     showTab(tabName) {
         console.log('📱 Showing tab:', tabName);
@@ -405,6 +302,8 @@ class App {
             lucide.createIcons();
         }
     }
+
+    // ========== Transactions Tab ==========
 
     async renderTransactionsTab() {
         console.log('📋 Rendering transactions tab');
@@ -474,513 +373,6 @@ class App {
         }
     }
 
-    async renderBudgetTab() {
-        console.log('💰 Rendering budget tab');
-        
-        // Update summary cards
-        await this.updateSummaryCards();
-        
-        const categories = await this.db.getAllCategories();
-        const container = document.getElementById('budget-list');
-        
-        if (!container) {
-            console.error('❌ Budget list container not found');
-            return;
-        }
-        
-        if (categories.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">
-                        <i data-lucide="wallet" style="width: 64px; height: 64px;"></i>
-                    </div>
-                    <h3>No Categories Yet</h3>
-                    <p>Create your first budget category to get started</p>
-                    <button class="btn-primary" id="fab-add-category-inline">
-                        <i data-lucide="plus"></i>
-                        <span>Add Category</span>
-                    </button>
-                </div>
-            `;
-            
-            const inlineBtn = document.getElementById('fab-add-category-inline');
-            if (inlineBtn) {
-                inlineBtn.addEventListener('click', () => this.openCategoryModal());
-            }
-            
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-            return;
-        }
-        
-        // Decrypt and group categories
-        const decryptedCategories = await Promise.all(
-            categories.map(async (cat) => ({
-                ...cat,
-                name: await this.security.decrypt(cat.encrypted_name),
-                limit: parseFloat(await this.security.decrypt(cat.encrypted_limit)),
-                type: cat.type || 'Expense'
-            }))
-        );
-        
-        const grouped = {
-            Income: [],
-            Expense: [],
-            Saving: [],
-            Transfer: []
-        };
-        
-        decryptedCategories.forEach(cat => {
-            grouped[cat.type].push(cat);
-        });
-        
-        // Sort by limit
-        Object.keys(grouped).forEach(type => {
-            grouped[type].sort((a, b) => b.limit - a.limit);
-        });
-        
-        let html = '';
-        for (const type of ['Income', 'Expense', 'Saving', 'Transfer']) {
-            if (grouped[type].length === 0) continue;
-            
-            html += `
-                <div class="budget-group">
-                    <h3 class="group-header">${type}</h3>
-            `;
-            
-            for (const cat of grouped[type]) {
-                const tracked = await this.calculateCategoryTracked(cat.id);
-                const isTransfer = cat.type === 'Transfer';
-                const percentage = cat.limit > 0 ? Math.min(100, (tracked / cat.limit) * 100) : 0;
-                const remaining = cat.limit - tracked;
-                
-                html += `
-                    <div class="category-card ${isTransfer ? 'transfer' : ''}" data-id="${cat.id}">
-                        <div class="category-header">
-                            <span class="category-name">${cat.name}</span>
-                            <span class="category-amount">$${cat.limit.toFixed(2)}</span>
-                        </div>
-                        ${!isTransfer ? `
-                            <div class="progress-bar">
-                                <div class="progress-fill ${percentage > 100 ? 'over-budget' : ''}" 
-                                     style="width: ${Math.min(100, percentage)}%"></div>
-                            </div>
-                            <div class="category-footer">
-                                <span class="footer-label">Tracked</span>
-                                <span class="footer-value">$${tracked.toFixed(2)}</span>
-                                <span class="footer-label">Remaining</span>
-                                <span class="footer-value ${remaining < 0 ? 'negative' : ''}">
-                                    $${remaining.toFixed(2)}
-                                </span>
-                            </div>
-                        ` : `
-                            <div class="transfer-note">Total: $${tracked.toFixed(2)}</div>
-                        `}
-                    </div>
-                `;
-            }
-            
-            html += `</div>`;
-        }
-        
-        // Add FAB
-        html += `
-            <button class="fab" id="fab-add-category" title="Add Category">
-                <i data-lucide="plus"></i>
-            </button>
-        `;
-        
-        container.innerHTML = html;
-        
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-    }
-
-    async updateSummaryCards() {
-        console.log('📊 Updating summary cards');
-        
-        const transactions = await this.db.getAllTransactions();
-        const categories = await this.db.getAllCategories();
-        
-        let totalIncome = 0;
-        let totalExpenses = 0;
-        let totalSavings = 0;
-        
-        // Calculate totals by category type
-        for (const transaction of transactions) {
-            const amount = parseFloat(await this.security.decrypt(transaction.encrypted_amount));
-            const category = categories.find(c => c.id === transaction.categoryId);
-            
-            if (!category) continue;
-            
-            const categoryType = category.type || 'Expense';
-            
-            if (categoryType === 'Income') {
-                totalIncome += Math.abs(amount);
-            } else if (categoryType === 'Expense') {
-                totalExpenses += Math.abs(amount);
-            } else if (categoryType === 'Saving') {
-                totalSavings += Math.abs(amount);
-            }
-        }
-        
-        // Update the DOM
-        const incomeCard = document.querySelector('.summary-card.income .summary-value');
-        const expensesCard = document.querySelector('.summary-card.expenses .summary-value');
-        const savingsCard = document.querySelector('.summary-card.savings .summary-value');
-        
-        if (incomeCard) incomeCard.textContent = `$${totalIncome.toFixed(2)}`;
-        if (expensesCard) expensesCard.textContent = `$${totalExpenses.toFixed(2)}`;
-        if (savingsCard) savingsCard.textContent = `$${totalSavings.toFixed(2)}`;
-    }
-
-    async renderSummaryTab() {
-        console.log('📊 Rendering summary tab');
-        
-        const container = document.getElementById('summary-container');
-        
-        if (!container) {
-            console.error('❌ Summary container not found');
-            return;
-        }
-        
-        const transactions = await this.db.getAllTransactions();
-        const categories = await this.db.getAllCategories();
-        
-        if (transactions.length === 0 || categories.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">
-                        <i data-lucide="bar-chart-2" style="width: 64px; height: 64px;"></i>
-                    </div>
-                    <h3>No Data to Summarize</h3>
-                    <p>Add transactions to see summary charts and analytics</p>
-                </div>
-            `;
-            
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-            return;
-        }
-        
-        // Calculate totals and category breakdowns
-        const summary = await this.calculateSummaryData(transactions, categories);
-        
-        // Build HTML with donut charts and tables
-        let html = '<div class="summary-sections">';
-        
-        // Render each category type section
-        for (const type of ['Income', 'Expense', 'Saving']) {
-            if (!summary[type] || summary[type].categories.length === 0) continue;
-            
-            html += this.renderCategorySection(type, summary[type]);
-        }
-        
-        html += '</div>';
-        
-        container.innerHTML = html;
-        
-        // Render donut charts after DOM update
-        setTimeout(() => {
-            for (const type of ['Income', 'Expense', 'Saving']) {
-                if (summary[type] && summary[type].categories.length > 0) {
-                    this.renderDonutChart(`donut-${type.toLowerCase()}`, summary[type].categories);
-                }
-            }
-        }, 100);
-        
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-    }
-
-    async calculateSummaryData(transactions, categories) {
-        const summary = {
-            Income: { total: 0, categories: [] },
-            Expense: { total: 0, categories: [] },
-            Saving: { total: 0, categories: [] }
-        };
-        
-        const categoryTotals = {};
-        const categoryBudgets = {};
-        
-        for (const transaction of transactions) {
-            const amount = Math.abs(parseFloat(await this.security.decrypt(transaction.encrypted_amount)));
-            const category = categories.find(c => c.id === transaction.categoryId);
-            
-            if (!category) continue;
-            
-            const categoryName = await this.security.decrypt(category.encrypted_name);
-            const categoryType = category.type || 'Expense';
-            const categoryBudget = parseFloat(await this.security.decrypt(category.encrypted_limit));
-            
-            if (!categoryTotals[categoryType]) {
-                categoryTotals[categoryType] = {};
-                categoryBudgets[categoryType] = {};
-            }
-            
-            if (!categoryTotals[categoryType][categoryName]) {
-                categoryTotals[categoryType][categoryName] = 0;
-                categoryBudgets[categoryType][categoryName] = categoryBudget;
-            }
-            
-            categoryTotals[categoryType][categoryName] += amount;
-        }
-        
-        // Convert to sorted arrays with budget info
-        for (const type of ['Income', 'Expense', 'Saving']) {
-            if (categoryTotals[type]) {
-                summary[type].categories = Object.entries(categoryTotals[type])
-                    .map(([name, tracked]) => ({
-                        name,
-                        tracked,
-                        budgeted: categoryBudgets[type][name] || 0
-                    }))
-                    .sort((a, b) => b.tracked - a.tracked);
-                
-                summary[type].total = summary[type].categories.reduce((sum, cat) => sum + cat.tracked, 0);
-            }
-        }
-        
-        return summary;
-    }
-
-    renderCategorySection(type, data) {
-        const colors = this.getCategoryColors(type);
-        const hasData = data.categories.length > 0;
-        
-        return `
-            <div class="summary-section">
-                <div class="section-header-row">
-                    <h3 class="section-header">${type} Summary</h3>
-                    ${hasData ? `
-                        <button class="toggle-details-btn" data-section="${type.toLowerCase()}">
-                            <i data-lucide="chevron-down"></i>
-                            <span class="btn-text">Show Details</span>
-                        </button>
-                    ` : ''}
-                </div>
-                
-                ${hasData ? `
-                    <!-- Details Table (Hidden by default) -->
-                    <div id="${type.toLowerCase()}-details" class="category-details hidden">
-                        <div class="details-table">
-                            <div class="details-table-header">
-                                <span class="col-name">Category</span>
-                                <span class="col-tracked">Tracked</span>
-                                <span class="col-budgeted">Budgeted</span>
-                                <span class="col-percent">%</span>
-                                <span class="col-remaining">${type === 'Income' ? 'Excess' : 'Remaining'}</span>
-                            </div>
-                            ${data.categories.map((cat, index) => {
-                                const percentage = cat.budgeted > 0 ? (cat.tracked / cat.budgeted * 100).toFixed(1) : 0;
-                                const remaining = cat.budgeted - cat.tracked;
-                                const isOverBudget = remaining < 0;
-                                const statusClass = isOverBudget ? 'negative' : 'positive';
-                                
-                                return `
-                                    <div class="details-table-row">
-                                        <span class="col-name">
-                                            <span class="breakdown-color" style="background: ${colors[index % colors.length]};"></span>
-                                            ${cat.name}
-                                        </span>
-                                        <span class="col-tracked">$${cat.tracked.toFixed(2)}</span>
-                                        <span class="col-budgeted">$${cat.budgeted.toFixed(2)}</span>
-                                        <span class="col-percent">${percentage}%</span>
-                                        <span class="col-remaining ${statusClass}">
-                                            ${type === 'Income' ? '+' : ''}$${Math.abs(remaining).toFixed(2)}
-                                        </span>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    </div>
-                    
-                    <!-- Donut Chart Only (No Legend) -->
-                    <div class="summary-content">
-                        <div class="donut-container-center">
-                            <svg id="donut-${type.toLowerCase()}" width="200" height="200" viewBox="0 0 200 200">
-                                <text x="100" y="95" text-anchor="middle" font-size="20" font-weight="bold" fill="var(--text-primary)">
-                                    $${data.total.toFixed(0)}
-                                </text>
-                                <text x="100" y="115" text-anchor="middle" font-size="12" fill="var(--text-secondary)">
-                                    Total ${type}
-                                </text>
-                            </svg>
-                        </div>
-                    </div>
-                ` : `
-                    <div class="empty-category-section">
-                        <p style="color: var(--text-secondary); text-align: center; padding: 20px;">
-                            No ${type.toLowerCase()} transactions yet
-                        </p>
-                    </div>
-                `}
-            </div>
-        `;
-    }
-
-    renderDonutChart(svgId, categories) {
-        const svg = document.getElementById(svgId);
-        if (!svg || categories.length === 0) {
-            console.log(`⚠️ Donut chart ${svgId}: No SVG or no categories`);
-            return;
-        }
-        
-        const total = categories.reduce((sum, cat) => sum + cat.total, 0);
-        const colors = this.getCategoryColors(svgId.includes('income') ? 'Income' : 
-                                             svgId.includes('saving') ? 'Saving' : 'Expense');
-        
-        const centerX = 100;
-        const centerY = 100;
-        const radius = 70;
-        const thickness = 25;
-        
-        console.log(`📊 Rendering donut ${svgId}: ${categories.length} categories`);
-        
-        // Handle single category - show full circle
-        if (categories.length === 1) {
-            console.log(`   Single category - showing full circle`);
-            
-            // Draw full circle using circle element instead of path
-            const outerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            outerCircle.setAttribute('cx', centerX);
-            outerCircle.setAttribute('cy', centerY);
-            outerCircle.setAttribute('r', radius);
-            outerCircle.setAttribute('fill', colors[0]);
-            
-            const innerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            innerCircle.setAttribute('cx', centerX);
-            innerCircle.setAttribute('cy', centerY);
-            innerCircle.setAttribute('r', radius - thickness);
-            innerCircle.setAttribute('fill', 'var(--bg-secondary)');
-            
-            svg.insertBefore(innerCircle, svg.firstChild);
-            svg.insertBefore(outerCircle, svg.firstChild);
-            return;
-        }
-        
-        // Multiple categories - normal donut segments
-        let currentAngle = -90; // Start at top
-        
-        categories.forEach((cat, index) => {
-            const percentage = cat.total / total;
-            const angle = percentage * 360;
-            
-            console.log(`   Category ${index}: ${cat.name} = ${percentage.toFixed(2)}% (${angle.toFixed(1)}°)`);
-            
-            const path = this.createDonutSegment(
-                centerX, centerY, radius, thickness,
-                currentAngle, currentAngle + angle
-            );
-            
-            const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            pathElement.setAttribute('d', path);
-            pathElement.setAttribute('fill', colors[index % colors.length]);
-            pathElement.setAttribute('class', 'donut-segment');
-            
-            svg.insertBefore(pathElement, svg.firstChild);
-            
-            currentAngle += angle;
-        });
-    }
-
-    createDonutSegment(cx, cy, radius, thickness, startAngle, endAngle) {
-        const innerRadius = radius - thickness;
-        
-        const start = this.polarToCartesian(cx, cy, radius, endAngle);
-        const end = this.polarToCartesian(cx, cy, radius, startAngle);
-        const innerStart = this.polarToCartesian(cx, cy, innerRadius, endAngle);
-        const innerEnd = this.polarToCartesian(cx, cy, innerRadius, startAngle);
-        
-        const largeArc = endAngle - startAngle > 180 ? 1 : 0;
-        
-        return [
-            'M', start.x, start.y,
-            'A', radius, radius, 0, largeArc, 0, end.x, end.y,
-            'L', innerEnd.x, innerEnd.y,
-            'A', innerRadius, innerRadius, 0, largeArc, 1, innerStart.x, innerStart.y,
-            'Z'
-        ].join(' ');
-    }
-
-    polarToCartesian(centerX, centerY, radius, angleInDegrees) {
-        const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
-        return {
-            x: centerX + (radius * Math.cos(angleInRadians)),
-            y: centerY + (radius * Math.sin(angleInRadians))
-        };
-    }
-
-    getCategoryColors(type) {
-        const colors = {
-            Income: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5'],
-            Expense: ['#ef4444', '#f87171', '#fca5a5', '#fecaca', '#fee2e2'],
-            Saving: ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe']
-        };
-        return colors[type] || colors.Expense;
-    }
-
-    renderMappingsTab() {
-        console.log('🔗 Rendering mappings tab');
-        const container = document.getElementById('mappings-list');
-        if (container) {
-            container.innerHTML = `
-                <div style="padding: 40px; text-align: center;">
-                    <i data-lucide="link" style="width: 64px; height: 64px; color: var(--text-secondary); margin: 0 auto;"></i>
-                    <h3 style="margin-top: 20px;">No Mappings Yet</h3>
-                    <p style="color: var(--text-secondary);">Import CSVs to create automatic mappings</p>
-                </div>
-            `;
-        }
-        
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-    }
-
-    renderSettingsTab() {
-        console.log('⚙️ Rendering settings tab');
-        const container = document.getElementById('settings-content');
-        if (container) {
-            container.innerHTML = `
-                <div style="padding: 20px;">
-                    <h2>Settings</h2>
-                    <div style="margin-top: 20px;">
-                        <button class="btn-danger" id="lock-app-btn" style="width: 100%;">
-                            <i data-lucide="lock"></i>
-                            <span>Lock App</span>
-                        </button>
-                    </div>
-                    <div style="margin-top: 20px; padding: 20px; background: var(--bg-secondary); border-radius: 12px;">
-                        <p style="font-size: 12px; color: var(--text-secondary);">
-                            App Version: v2.8.0<br>
-                            Database: Encrypted with AES-256-GCM<br>
-                            Zero-knowledge architecture
-                        </p>
-                    </div>
-                </div>
-            `;
-            
-            // Attach lock button listener
-            const lockBtn = document.getElementById('lock-app-btn');
-            if (lockBtn) {
-                lockBtn.addEventListener('click', () => {
-                    this.security.clearEncryptionKey();
-                    this.appState = 'locked';
-                    this.render();
-                });
-            }
-        }
-        
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-    }
-
     async openTransactionModal(transactionId = null) {
         console.log('💵 Opening transaction modal, ID:', transactionId);
         
@@ -1030,14 +422,22 @@ class App {
                 deleteBtn = document.createElement('button');
                 deleteBtn.id = 'delete-transaction-btn';
                 deleteBtn.type = 'button';
-                deleteBtn.className = 'btn-danger';
-                deleteBtn.innerHTML = '<i data-lucide="trash-2"></i><span>Delete</span>';
+                deleteBtn.className = 'btn-icon-danger';
+                deleteBtn.innerHTML = '<i data-lucide="trash-2"></i>';
+                deleteBtn.title = 'Delete';
                 const modalActions = form.querySelector('.modal-actions');
                 if (modalActions) {
                     modalActions.insertBefore(deleteBtn, modalActions.firstChild);
                 }
             }
             deleteBtn.classList.remove('hidden');
+            
+            // Update save button to icon
+            const saveBtn = document.getElementById('transaction-form-submit');
+            if (saveBtn) {
+                saveBtn.innerHTML = '<i data-lucide="check"></i>';
+                saveBtn.title = 'Save';
+            }
         } else {
             document.getElementById('transaction-modal-title').textContent = 'Add Transaction';
             form.reset();
@@ -1050,6 +450,13 @@ class App {
             const deleteBtn = document.getElementById('delete-transaction-btn');
             if (deleteBtn) {
                 deleteBtn.classList.add('hidden');
+            }
+            
+            // Reset save button to text for Add mode
+            const saveBtn = document.getElementById('transaction-form-submit');
+            if (saveBtn) {
+                saveBtn.innerHTML = 'Save';
+                saveBtn.title = '';
             }
         }
         
@@ -1159,6 +566,177 @@ class App {
         }
     }
 
+    // ========== Budget Tab ==========
+
+    async renderBudgetTab() {
+        console.log('💰 Rendering budget tab');
+        
+        // Update summary cards
+        await this.updateSummaryCards();
+        
+        const categories = await this.db.getAllCategories();
+        const container = document.getElementById('budget-list');
+        
+        if (!container) {
+            console.error('❌ Budget list container not found');
+            return;
+        }
+        
+        if (categories.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <i data-lucide="wallet" style="width: 64px; height: 64px;"></i>
+                    </div>
+                    <h3>No Categories Yet</h3>
+                    <p>Create your first budget category to get started</p>
+                    <button class="btn-primary" id="fab-add-category-inline">
+                        <i data-lucide="plus"></i>
+                        <span>Add Category</span>
+                    </button>
+                </div>
+            `;
+            
+            const inlineBtn = document.getElementById('fab-add-category-inline');
+            if (inlineBtn) {
+                inlineBtn.addEventListener('click', () => this.openCategoryModal());
+            }
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            return;
+        }
+        
+        // Decrypt and group categories
+        const decryptedCategories = await Promise.all(
+            categories.map(async (cat) => ({
+                ...cat,
+                name: await this.security.decrypt(cat.encrypted_name),
+                limit: parseFloat(await this.security.decrypt(cat.encrypted_limit)),
+                type: cat.type || 'Expense'
+            }))
+        );
+        
+        const grouped = {
+            Income: [],
+            Expense: [],
+            Saving: [],
+            Transfer: []
+        };
+        
+        decryptedCategories.forEach(cat => {
+            grouped[cat.type].push(cat);
+        });
+        
+        // Sort by limit
+        Object.keys(grouped).forEach(type => {
+            grouped[type].sort((a, b) => b.limit - a.limit);
+        });
+        
+        let html = '';
+        const typeColors = {
+            Income: 'income-header',
+            Expense: 'expense-header',
+            Saving: 'saving-header',
+            Transfer: 'transfer-header'
+        };
+        
+        for (const type of ['Income', 'Expense', 'Saving', 'Transfer']) {
+            if (grouped[type].length === 0) continue;
+            
+            html += `
+                <div class="budget-group">
+                    <h3 class="group-header ${typeColors[type]}">${type}</h3>
+            `;
+            
+            for (const cat of grouped[type]) {
+                const tracked = await this.calculateCategoryTracked(cat.id);
+                const isTransfer = cat.type === 'Transfer';
+                const percentage = cat.limit > 0 ? Math.min(100, (tracked / cat.limit) * 100) : 0;
+                const remaining = cat.limit - tracked;
+                
+                html += `
+                    <div class="category-card ${isTransfer ? 'transfer' : ''}" data-id="${cat.id}">
+                        <div class="category-header">
+                            <span class="category-name">${cat.name}</span>
+                            <span class="category-amount">$${cat.limit.toFixed(2)}</span>
+                        </div>
+                        ${!isTransfer ? `
+                            <div class="progress-bar">
+                                <div class="progress-fill ${percentage > 100 ? 'over-budget' : ''}" 
+                                     style="width: ${Math.min(100, percentage)}%"></div>
+                            </div>
+                            <div class="category-footer">
+                                <span class="footer-label">Tracked</span>
+                                <span class="footer-value">$${tracked.toFixed(2)}</span>
+                                <span class="footer-label">Remaining</span>
+                                <span class="footer-value ${remaining < 0 ? 'negative' : ''}">
+                                    $${remaining.toFixed(2)}
+                                </span>
+                            </div>
+                        ` : `
+                            <div class="transfer-note">Total: $${tracked.toFixed(2)}</div>
+                        `}
+                    </div>
+                `;
+            }
+            
+            html += `</div>`;
+        }
+        
+        // Add FAB
+        html += `
+            <button class="fab" id="fab-add-category" title="Add Category">
+                <i data-lucide="plus"></i>
+            </button>
+        `;
+        
+        container.innerHTML = html;
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    async updateSummaryCards() {
+        console.log('📊 Updating summary cards');
+        
+        const transactions = await this.db.getAllTransactions();
+        const categories = await this.db.getAllCategories();
+        
+        let totalIncome = 0;
+        let totalExpenses = 0;
+        let totalSavings = 0;
+        
+        // Calculate totals by category type
+        for (const transaction of transactions) {
+            const amount = parseFloat(await this.security.decrypt(transaction.encrypted_amount));
+            const category = categories.find(c => c.id === transaction.categoryId);
+            
+            if (!category) continue;
+            
+            const categoryType = category.type || 'Expense';
+            
+            if (categoryType === 'Income') {
+                totalIncome += Math.abs(amount);
+            } else if (categoryType === 'Expense') {
+                totalExpenses += Math.abs(amount);
+            } else if (categoryType === 'Saving') {
+                totalSavings += Math.abs(amount);
+            }
+        }
+        
+        // Update the DOM
+        const incomeCard = document.querySelector('.summary-card.income .summary-value');
+        const expensesCard = document.querySelector('.summary-card.expenses .summary-value');
+        const savingsCard = document.querySelector('.summary-card.savings .summary-value');
+        
+        if (incomeCard) incomeCard.textContent = `$${totalIncome.toFixed(2)}`;
+        if (expensesCard) expensesCard.textContent = `$${totalExpenses.toFixed(2)}`;
+        if (savingsCard) savingsCard.textContent = `$${totalSavings.toFixed(2)}`;
+    }
+
     async openCategoryModal(categoryId = null) {
         console.log('📝 Opening category modal, ID:', categoryId);
         
@@ -1193,14 +771,22 @@ class App {
                 deleteBtn = document.createElement('button');
                 deleteBtn.id = 'delete-category-btn';
                 deleteBtn.type = 'button';
-                deleteBtn.className = 'btn-danger';
-                deleteBtn.innerHTML = '<i data-lucide="trash-2"></i><span>Delete</span>';
+                deleteBtn.className = 'btn-icon-danger';
+                deleteBtn.innerHTML = '<i data-lucide="trash-2"></i>';
+                deleteBtn.title = 'Delete';
                 const modalActions = form.querySelector('.modal-actions');
                 if (modalActions) {
                     modalActions.insertBefore(deleteBtn, modalActions.firstChild);
                 }
             }
             deleteBtn.classList.remove('hidden');
+            
+            // Update save button to icon
+            const saveBtn = document.getElementById('category-form-submit');
+            if (saveBtn) {
+                saveBtn.innerHTML = '<i data-lucide="check"></i>';
+                saveBtn.title = 'Save';
+            }
         } else {
             document.getElementById('category-modal-title').textContent = 'Add Category';
             form.reset();
@@ -1209,6 +795,13 @@ class App {
             const deleteBtn = document.getElementById('delete-category-btn');
             if (deleteBtn) {
                 deleteBtn.classList.add('hidden');
+            }
+            
+            // Reset save button to text for Add mode
+            const saveBtn = document.getElementById('category-form-submit');
+            if (saveBtn) {
+                saveBtn.innerHTML = 'Save';
+                saveBtn.title = '';
             }
         }
         
@@ -1291,18 +884,374 @@ class App {
         
         return total;
     }
-}
 
-// Initialize app
-let app;
-console.log('📦 Script loaded, waiting for DOM...');
+    // ========== Summary Tab ==========
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        console.log('📄 DOM ready, creating App instance...');
-        app = new App();
-    });
-} else {
-    console.log('📄 DOM already ready, creating App instance...');
-    app = new App();
+    async renderSummaryTab() {
+        console.log('📊 Rendering summary tab');
+        
+        const container = document.getElementById('summary-container');
+        
+        if (!container) {
+            console.error('❌ Summary container not found');
+            return;
+        }
+        
+        const transactions = await this.db.getAllTransactions();
+        const categories = await this.db.getAllCategories();
+        
+        if (transactions.length === 0 || categories.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <i data-lucide="bar-chart-2" style="width: 64px; height: 64px;"></i>
+                    </div>
+                    <h3>No Data to Summarize</h3>
+                    <p>Add transactions to see summary charts and analytics</p>
+                </div>
+            `;
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            return;
+        }
+        
+        // Calculate totals and category breakdowns
+        const summary = await this.calculateSummaryData(transactions, categories);
+        
+        // Build HTML with donut charts and tables
+        let html = '<div class="summary-sections">';
+        
+        // Render each category type section
+        for (const type of ['Income', 'Expense', 'Saving']) {
+            if (!summary[type] || summary[type].categories.length === 0) continue;
+            
+            html += this.renderCategorySection(type, summary[type]);
+        }
+        
+        html += '</div>';
+        
+        container.innerHTML = html;
+        
+        // Render donut charts after DOM update
+        setTimeout(() => {
+            for (const type of ['Income', 'Expense', 'Saving']) {
+                if (summary[type] && summary[type].categories.length > 0) {
+                    this.renderDonutChart(`donut-${type.toLowerCase()}`, summary[type].categories);
+                }
+            }
+        }, 100);
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    async calculateSummaryData(transactions, categories) {
+        const summary = {
+            Income: { total: 0, categories: [] },
+            Expense: { total: 0, categories: [] },
+            Saving: { total: 0, categories: [] }
+        };
+        
+        const categoryTotals = {};
+        const categoryBudgets = {};
+        
+        for (const transaction of transactions) {
+            const amount = Math.abs(parseFloat(await this.security.decrypt(transaction.encrypted_amount)));
+            const category = categories.find(c => c.id === transaction.categoryId);
+            
+            if (!category) continue;
+            
+            const categoryName = await this.security.decrypt(category.encrypted_name);
+            const categoryType = category.type || 'Expense';
+            const categoryBudget = parseFloat(await this.security.decrypt(category.encrypted_limit));
+            
+            if (!categoryTotals[categoryType]) {
+                categoryTotals[categoryType] = {};
+                categoryBudgets[categoryType] = {};
+            }
+            
+            if (!categoryTotals[categoryType][categoryName]) {
+                categoryTotals[categoryType][categoryName] = 0;
+                categoryBudgets[categoryType][categoryName] = categoryBudget;
+            }
+            
+            categoryTotals[categoryType][categoryName] += amount;
+        }
+        
+        // Convert to sorted arrays with budget info
+        for (const type of ['Income', 'Expense', 'Saving']) {
+            if (categoryTotals[type]) {
+                summary[type].categories = Object.entries(categoryTotals[type])
+                    .map(([name, tracked]) => ({
+                        name,
+                        tracked,
+                        total: tracked,
+                        budgeted: categoryBudgets[type][name] || 0
+                    }))
+                    .sort((a, b) => b.tracked - a.tracked);
+                
+                summary[type].total = summary[type].categories.reduce((sum, cat) => sum + cat.tracked, 0);
+            }
+        }
+        
+        return summary;
+    }
+
+    renderCategorySection(type, data) {
+        const colors = this.getCategoryColors(type);
+        const hasData = data.categories.length > 0;
+        
+        return `
+            <div class="summary-section">
+                <div class="section-header-row">
+                    <h3 class="section-header">${type} Summary</h3>
+                    ${hasData ? `
+                        <button class="toggle-details-btn" data-section="${type.toLowerCase()}">
+                            <i data-lucide="chevron-down"></i>
+                            <span class="btn-text">Show Details</span>
+                        </button>
+                    ` : ''}
+                </div>
+                
+                ${hasData ? `
+                    <!-- Details Table (Hidden by default) -->
+                    <div id="${type.toLowerCase()}-details" class="category-details hidden">
+                        <div class="details-table">
+                            <div class="details-table-header">
+                                <span class="col-name">Category</span>
+                                <span class="col-tracked">Tracked</span>
+                                <span class="col-budgeted">Budgeted</span>
+                                <span class="col-percent">%</span>
+                                <span class="col-remaining">${type === 'Income' ? 'Excess' : 'Remaining'}</span>
+                            </div>
+                            ${data.categories.map((cat, index) => {
+                                const percentage = cat.budgeted > 0 ? (cat.tracked / cat.budgeted * 100).toFixed(1) : 0;
+                                // For income: tracked - budgeted (positive = overpaid, negative = underpaid)
+                                // For expenses: budgeted - tracked (positive = remaining, negative = overspent)
+                                const diff = type === 'Income' ? (cat.tracked - cat.budgeted) : (cat.budgeted - cat.tracked);
+                                const statusClass = diff < 0 ? 'negative' : 'positive';
+                                
+                                return `
+                                    <div class="details-table-row">
+                                        <span class="col-name">
+                                            <span class="breakdown-color" style="background: ${colors[index % colors.length]};"></span>
+                                            ${cat.name}
+                                        </span>
+                                        <span class="col-tracked">$${cat.tracked.toFixed(2)}</span>
+                                        <span class="col-budgeted">$${cat.budgeted.toFixed(2)}</span>
+                                        <span class="col-percent">${percentage}%</span>
+                                        <span class="col-remaining ${statusClass}">
+                                            ${diff >= 0 ? '+' : ''}$${diff.toFixed(2)}
+                                        </span>
+                                    </div>
+                                `;
+                            }).join('')}
+                            ${data.categories.length > 1 ? `
+                                <div class="details-table-row total-row">
+                                    <span class="col-name"><strong>Total</strong></span>
+                                    <span class="col-tracked"><strong>$${data.categories.reduce((sum, cat) => sum + cat.tracked, 0).toFixed(2)}</strong></span>
+                                    <span class="col-budgeted"><strong>$${data.categories.reduce((sum, cat) => sum + cat.budgeted, 0).toFixed(2)}</strong></span>
+                                    <span class="col-percent"></span>
+                                    <span class="col-remaining"><strong>${type === 'Income' ? '+' : ''}$${(type === 'Income' ? 
+                                        (data.categories.reduce((sum, cat) => sum + cat.tracked, 0) - data.categories.reduce((sum, cat) => sum + cat.budgeted, 0)) :
+                                        (data.categories.reduce((sum, cat) => sum + cat.budgeted, 0) - data.categories.reduce((sum, cat) => sum + cat.tracked, 0))
+                                    ).toFixed(2)}</strong></span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Donut Chart with Legend -->
+                    <div class="summary-content">
+                        <div class="donut-container-center">
+                            <svg id="donut-${type.toLowerCase()}" width="200" height="200" viewBox="0 0 200 200">
+                                <text x="100" y="95" text-anchor="middle" font-size="20" font-weight="bold" fill="var(--text-primary)">
+                                    $${data.total.toFixed(0)}
+                                </text>
+                                <text x="100" y="115" text-anchor="middle" font-size="12" fill="var(--text-secondary)">
+                                    Total ${type}
+                                </text>
+                            </svg>
+                        </div>
+                        <div class="chart-legend">
+                            ${data.categories.map((cat, index) => `
+                                <div class="legend-item">
+                                    <span class="legend-color" style="background: ${colors[index % colors.length]};"></span>
+                                    <span class="legend-label">${cat.name}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : `
+                    <div class="empty-category-section">
+                        <p style="color: var(--text-secondary); text-align: center; padding: 20px;">
+                            No ${type.toLowerCase()} transactions yet
+                        </p>
+                    </div>
+                `}
+            </div>
+        `;
+    }
+
+    renderDonutChart(svgId, categories) {
+        const svg = document.getElementById(svgId);
+        if (!svg || categories.length === 0) {
+            console.log(`⚠️ Donut chart ${svgId}: No SVG or no categories`);
+            return;
+        }
+        
+        const total = categories.reduce((sum, cat) => sum + cat.total, 0);
+        const colors = this.getCategoryColors(svgId.includes('income') ? 'Income' : 
+                                             svgId.includes('saving') ? 'Saving' : 'Expense');
+        
+        const centerX = 100;
+        const centerY = 100;
+        const radius = 70;
+        const thickness = 25;
+        
+        console.log(`📊 Rendering donut ${svgId}: ${categories.length} categories`);
+        
+        // Handle single category - show full circle
+        if (categories.length === 1) {
+            console.log(`   Single category - showing full circle`);
+            
+            // Draw full circle using circle element instead of path
+            const outerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            outerCircle.setAttribute('cx', centerX);
+            outerCircle.setAttribute('cy', centerY);
+            outerCircle.setAttribute('r', radius);
+            outerCircle.setAttribute('fill', colors[0]);
+            
+            const innerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            innerCircle.setAttribute('cx', centerX);
+            innerCircle.setAttribute('cy', centerY);
+            innerCircle.setAttribute('r', radius - thickness);
+            innerCircle.setAttribute('fill', 'var(--bg-secondary)');
+            
+            svg.insertBefore(innerCircle, svg.firstChild);
+            svg.insertBefore(outerCircle, svg.firstChild);
+            return;
+        }
+        
+        // Multiple categories - normal donut segments
+        let currentAngle = -90; // Start at top
+        
+        categories.forEach((cat, index) => {
+            const percentage = cat.total / total;
+            const angle = percentage * 360;
+            
+            const path = this.createDonutSegment(
+                centerX, centerY, radius, thickness,
+                currentAngle, currentAngle + angle
+            );
+            
+            const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            pathElement.setAttribute('d', path);
+            pathElement.setAttribute('fill', colors[index % colors.length]);
+            pathElement.setAttribute('class', 'donut-segment');
+            
+            svg.insertBefore(pathElement, svg.firstChild);
+            
+            currentAngle += angle;
+        });
+    }
+
+    createDonutSegment(cx, cy, radius, thickness, startAngle, endAngle) {
+        const innerRadius = radius - thickness;
+        
+        const start = this.polarToCartesian(cx, cy, radius, endAngle);
+        const end = this.polarToCartesian(cx, cy, radius, startAngle);
+        const innerStart = this.polarToCartesian(cx, cy, innerRadius, endAngle);
+        const innerEnd = this.polarToCartesian(cx, cy, innerRadius, startAngle);
+        
+        const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+        
+        return [
+            'M', start.x, start.y,
+            'A', radius, radius, 0, largeArc, 0, end.x, end.y,
+            'L', innerEnd.x, innerEnd.y,
+            'A', innerRadius, innerRadius, 0, largeArc, 1, innerStart.x, innerStart.y,
+            'Z'
+        ].join(' ');
+    }
+
+    polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+        const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+        return {
+            x: centerX + (radius * Math.cos(angleInRadians)),
+            y: centerY + (radius * Math.sin(angleInRadians))
+        };
+    }
+
+    getCategoryColors(type) {
+        const colors = {
+            Income: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5'],
+            Expense: ['#ef4444', '#f87171', '#fca5a5', '#fecaca', '#fee2e2'],
+            Saving: ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe']
+        };
+        return colors[type] || colors.Expense;
+    }
+
+    // ========== Mappings Tab ==========
+
+    renderMappingsTab() {
+        console.log('🔗 Rendering mappings tab');
+        const container = document.getElementById('mappings-list');
+        if (container) {
+            container.innerHTML = `
+                <div style="padding: 40px; text-align: center;">
+                    <i data-lucide="link" style="width: 64px; height: 64px; color: var(--text-secondary); margin: 0 auto;"></i>
+                    <h3 style="margin-top: 20px;">No Mappings Yet</h3>
+                    <p style="color: var(--text-secondary);">Import CSVs to create automatic mappings</p>
+                </div>
+            `;
+        }
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    // ========== Settings Tab ==========
+
+    renderSettingsTab() {
+        console.log('⚙️ Rendering settings tab');
+        const container = document.getElementById('settings-content');
+        if (container) {
+            container.innerHTML = `
+                <div style="padding: 20px;">
+                    <h2>Settings</h2>
+                    <div style="margin-top: 20px;">
+                        <button class="btn-danger" id="lock-app-btn" style="width: 100%;">
+                            <i data-lucide="lock"></i>
+                            <span>Lock App</span>
+                        </button>
+                    </div>
+                    <div style="margin-top: 20px; padding: 20px; background: var(--bg-secondary); border-radius: 12px;">
+                        <p style="font-size: 12px; color: var(--text-secondary);">
+                            App Version: v2.8.3<br>
+                            Database: Encrypted with AES-256-GCM<br>
+                            Zero-knowledge architecture
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            // Attach lock button listener
+            const lockBtn = document.getElementById('lock-app-btn');
+            if (lockBtn) {
+                lockBtn.addEventListener('click', () => {
+                    this.security.clearEncryptionKey();
+                    return { locked: true };
+                });
+            }
+        }
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
 }

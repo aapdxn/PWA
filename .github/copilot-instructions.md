@@ -37,15 +37,68 @@ You are acting as a Senior Frontend Architect and Security Specialist. All code 
 - **Add Bar:** Top bar with 60% width, centered, containing "Add Transaction" and "Import CSV" buttons.
 
 ## 5. Development Guidelines
-- Use Vanilla JavaScript (ES6+).
-- Use modular Class-based structures: `SecurityManager`, `DatabaseManager`, `CSVImporter`, and main `App` class.
-- **File Structure:**
-  - `/app.js` - Main application controller (no class declarations, only App class).
-  - `/js/security-manager.js` - SecurityManager class only.
-  - `/js/database.js` - DatabaseManager class only.
-  - `/js/csv-importer.js` - CSVImporter class only.
-- Ensure all external libraries (Dexie, Lucide, PapaParse) are called via CDN.
+- Use Vanilla JavaScript (ES6+ ES Modules).
+- Use modular Class-based structures with Named Exports: `SecurityManager`, `DatabaseManager`, `CSVEngine`, `UIManager`, and main `App` class.
+- **File Structure (ES Modules):**
+  - `/main.js` - Main application controller (App class + dependency injection) - **MAX 200 lines**
+  - `/js/security.js` - `export class SecurityManager` - Pure Web Crypto API operations - **MAX 200 lines**
+  - `/js/database.js` - `export class DatabaseManager` - Dexie schema and CRUD (uses global Dexie from CDN) - **MAX 150 lines**
+  - `/js/csv-importer.js` - `export class CSVEngine` - CSV import logic (uses global Papa from CDN) - **MAX 250 lines**
+  - `/js/ui.js` - `export class UIManager` - UI coordinator and event delegation - **MAX 300 lines**
+  - `/js/ui/auth-ui.js` - `export class AuthUI` - Setup & unlock screens - **MAX 150 lines**
+  - `/js/ui/transaction-ui.js` - `export class TransactionUI` - Transaction CRUD - **MAX 350 lines**
+  - `/js/ui/budget-ui.js` - `export class BudgetUI` - Budget category management - **MAX 400 lines**
+  - `/js/ui/summary-ui.js` - `export class SummaryUI` - Charts and analytics - **MAX 350 lines**
+  - `/css/base.css` - Variables, reset, utilities - **MAX 100 lines**
+  - `/css/components.css` - Buttons, forms, cards, modals - **MAX 500 lines**
+  - `/css/layout.css` - Navigation, layout structure - **MAX 250 lines**
+  - `/css/pages.css` - Page-specific styles - **MAX 500 lines**
+  - `/css/utilities.css` - Helper classes, responsive - **MAX 100 lines**
+- **CRITICAL:** External libraries (Dexie, Lucide, PapaParse) are loaded via CDN as **global variables**, NOT ES module imports.
 - **Never duplicate class declarations** across files - each class lives in exactly one file.
+- All modules use **Named Exports** (`export class ...`), not default exports.
+
+### File Size Management Protocol
+**MANDATORY RULES** to maintain AI readability and performance:
+
+1. **Maximum File Sizes:**
+   - Individual module files: **250-500 lines MAX** depending on purpose (see file structure above)
+   - **CRITICAL:** Any file exceeding 1000 lines MUST be refactored immediately
+   - All files must be fully readable in a single read operation
+
+2. **1000-Line Threshold Trigger:**
+   - When ANY file reaches or exceeds **1000 lines**, stop and propose refactoring
+   - Present a modular split plan following "One file, one task" principle
+   - Get user approval before proceeding with further changes to that file
+   - Document the refactoring decision and new structure
+
+3. **When to Split Files:**
+   - If a class has more than 15 methods, consider splitting by functional area
+   - Create helper classes/functions in separate files when logic exceeds 50 lines
+   - Extract repeated patterns into utility modules
+   - Follow domain-driven boundaries (auth, transactions, budget, etc.)
+
+4. **Modular Structure Enforcement:**
+   - NEVER add methods to files outside their designated purpose
+   - Security.js: ONLY crypto operations, NO UI or database logic
+   - Database.js: ONLY Dexie CRUD, NO encryption or rendering
+   - CSV-importer.js: ONLY import/export logic, NO UI
+   - UI modules: ONLY their designated UI domain (auth, transactions, budget, summary)
+
+5. **Prevention of Monolithic Regression:**
+   - Before adding a new feature, check current file sizes
+   - If adding >50 lines to any file, first evaluate if a new module is needed
+   - Keep methods focused: one method = one responsibility
+   - Target method size: **under 30 lines** each
+
+6. **Code Review Checklist Before Any Modification:**
+   - [ ] Does this change keep the file under its size limit?
+   - [ ] Is this logic in the correct module?
+   - [ ] Can this be extracted to a helper function?
+   - [ ] Will AI be able to read this entire file in one pass?
+   - [ ] Is this file approaching 1000 lines? (If yes, propose refactoring first)
+
+**If a file becomes too large:** Create a new module (e.g., `ui/helpers.js`, `validation.js`) and extract related functionality.
 
 ## 6. Continuous Learning & Troubleshooting
 
@@ -204,10 +257,50 @@ Whenever a bug is fixed or behavior is corrected, immediately document it here t
 - **Solution:** Always ensure all methods called in event listeners are defined before closing the class
 - **Prevention:** When adding event listeners, immediately add corresponding method stubs; use a checklist to verify all referenced methods exist
 
-**Issue 31: File Size Management for Large Classes**
+**Issue 31:** File Size Management for Large Classes**
 - **Root Cause:** Large monolithic class files become difficult to process and prone to incomplete modifications
 - **Solution:** Split large classes into logical method groups; use helper methods to break down complex operations
 - **Prevention:** Keep methods focused and single-purpose; extract complex logic into separate helper methods; aim for methods under 50 lines
+
+**Issue 32: ES Module Imports vs CDN Global Variables**
+- **Root Cause:** Attempting to import Dexie, Papa, or lucide as ES modules when they're loaded as CDN globals
+- **Solution:** Access these libraries as global variables (window.Dexie, window.Papa, window.lucide) - do NOT use import statements
+- **Prevention:** Always check that CDN libraries are ready before initializing (see waitForDependencies in main.js)
+
+**Issue 33: Modular Structure File Organization**
+- **Root Cause:** Confusion about which logic belongs in which module
+- **Solution:** Follow strict separation: security.js (crypto only), database.js (Dexie CRUD only), csv-importer.js (import logic), ui.js (ALL DOM/rendering)
+- **Prevention:** UIManager owns ALL event listeners and rendering - do NOT add DOM manipulation to other modules
+
+**Issue 34: File Size Bloat and AI Read Limitations**
+- **Root Cause:** Files growing too large (>300 lines) cause incomplete AI processing and partial code modifications
+- **Solution:** Enforce maximum file sizes per module; split files when approaching limits
+- **Prevention:** Check file line count before adding features; extract helpers when methods exceed 30 lines; ui.js is allowed up to 1200 lines but should split rendering methods into logical groups
+
+**Issue 35: Regression to Monolithic Structure**
+- **Root Cause:** Gradually adding code to existing files without considering modular boundaries
+- **Solution:** Always evaluate if new code belongs in current file or needs new module; review file structure monthly
+- **Prevention:** Use File Size Management Protocol (Section 5) before every code change; maintain separation of concerns
+
+**Issue 36: CSS and JavaScript File Bloat (1000+ Lines)**
+- **Root Cause:** Single large CSS file (1069 lines) and UI.js file (1225 lines) exceeded manageable size for AI processing
+- **Solution:** Refactored into modular structure: CSS split into 5 files (base, components, layout, pages, utilities), UI.js split into coordinator + 4 feature modules (auth, transaction, budget, summary)
+- **Prevention:** Implement 1000-line threshold rule - when any file reaches 1000 lines, stop and propose refactoring before continuing
+
+**Issue 37: CSV Import Page Tab Switching Bug**
+- **Root Cause:** Opening CSV import added `.hidden` class to all `.tab-content` elements, but `showTab()` only manages `.active` class - never removes `.hidden`
+- **Solution:** Use `.active` class system consistently - CSV import page now removes `.active` from all tabs (like normal switching), adds `.active` to itself; when closing, removes `.active` and adds `.hidden` only to CSV page
+- **Prevention:** Always use the same class management system (`.active`) for all tab-like UI elements; document class usage patterns clearly
+
+**Issue 38: Mappings CSV File Input Not Triggering**
+- **Root Cause:** File input element is created dynamically in `renderMappingsTab()`, which happens AFTER `attachEventListeners()` is called, so the change listener was trying to attach to a non-existent element
+- **Solution:** Moved the `addEventListener('change')` to inside `renderMappingsTab()` immediately after the file input element is created via innerHTML
+- **Prevention:** When attaching event listeners to dynamically created elements, attach them immediately after creation, not in initial setup
+
+**Issue 39: Unmapped Categories in Mappings CSV**
+- **Root Cause:** CSV contains category names that don't exist in budget; previously just showed "Category not found" and skipped
+- **Solution:** Before showing review page, detect all unmapped categories and show modal for each with two options: (1) Map to existing category (dropdown), (2) Create new category with same name (select type: Income/Expense/Saving)
+- **Prevention:** Always provide resolution path for missing reference data instead of silent failure
 
 ## 6.2 PWA Refresh Strategy (Aggressive Update Mode)
 
@@ -248,9 +341,9 @@ navigator.serviceWorker.register('sw.js')
                 }
             });
         });
-    });
-```
-
+    });2`
+- **Last Updated:** 2025-12-22 (Fixed csv-importer.js syntax error)
+- **Next Version:** `v2.10.3
 **Cache Versioning Rules:**
 - Increment `CACHE_VERSION` (e.g., `v2.2.1` → `v2.2.2`) for ANY code change.
 - Use semantic versioning: `vMAJOR.MINOR.PATCH`
@@ -258,9 +351,9 @@ navigator.serviceWorker.register('sw.js')
   - MINOR: New features (CSV import, new tabs, etc.).
   - PATCH: Bug fixes, style tweaks, minor refactors.
 
-**Current Cache Version:** `v2.8.3`
-- **Last Updated:** 2025-01-XX
-- **Next Version:** `v2.8.4` (for next change)
+**Current Cache Version:** `v2.23.6`
+- **Last Updated:** 2025-12-23 (Removed duplicate orphaned code lines causing syntax error)
+- **Next Version:** `v2.23.7` (for next change)
 
 **Quick Cache Clear Command:**
 ```javascript
@@ -407,7 +500,21 @@ Perform these checks at least monthly:
 
 ## Change Log
 
-- **2025-01-XX:** Added Issue 7-10 to Section 6.1.
+- **2025-12-22:** **CRITICAL UPDATE** - Added File Size Management Protocol to Section 5:
+  - Established maximum file sizes for each module
+  - Created prevention rules for monolithic regression
+  - Added code review checklist for all modifications
+  - Enforced separation of concerns with strict boundaries
+  - Cache version: v2.10.2
+- **2025-12-22:** **MAJOR REFACTOR** - Modularized monolithic app.js (1308 lines) into ES6 modules:
+  - Created `/main.js` as dependency injection entry point
+  - Extracted `/js/security.js` (SecurityManager - 157 lines)
+  - Extracted `/js/database.js` (DatabaseManager - 120 lines)
+  - Extracted `/js/csv-importer.js` (CSVEngine - 175 lines)
+  - Extracted `/js/ui.js` (UIManager - 1100+ lines)
+  - Updated Section 5 with ES Module structure
+  - Cache version bumped to v2.10.0
+- **2025-01-XX:** Added Issue 7-30 to Section 6.1.
 - **2025-01-XX:** Added current cache version tracking and quick clear command.
 - **2025-01-XX:** Added Section 7 - Reference Data Handling.
 - **2025-01-XX:** Added Section 6 - Continuous Learning & Troubleshooting.

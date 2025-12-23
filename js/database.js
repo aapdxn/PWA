@@ -1,23 +1,32 @@
-class DatabaseManager {
+// DatabaseManager - Uses global Dexie (loaded via CDN)
+// DO NOT import Dexie - it's loaded globally in index.html
+export class DatabaseManager {
     constructor() {
+        // Use global Dexie variable
+        if (typeof Dexie === 'undefined') {
+            throw new Error('Dexie is not loaded. Ensure Dexie CDN is loaded in index.html');
+        }
+        
         this.db = new Dexie('VaultBudget');
-        this.db.version(2).stores({
+        
+        this.db.version(6).stores({
             settings: 'key',
             categories: '++id, type',
-            transactions: '++id, categoryId, encrypted_date',
+            transactions: '++id, categoryId',
             mappings_accounts: 'account_number',
             mappings_descriptions: 'description',
-            category_monthly_limits: '++id, categoryId, monthKey' // New table for month-specific limits
+            category_budgets: '[categoryId+month]'
         });
     }
 
     // Settings
     async getSetting(key) {
-        return await this.db.settings.get(key);
+        const record = await this.db.settings.get(key);
+        return record || null;
     }
 
     async saveSetting(key, value) {
-        return await this.db.settings.put({ key, value });
+        await this.db.settings.put({ key, value });
     }
 
     // Categories
@@ -30,19 +39,16 @@ class DatabaseManager {
     }
 
     async saveCategory(category) {
-        // Ensure type field exists (Income, Expense, Saving, Transfer)
-        if (!category.type) {
-            category.type = 'Expense';
-        }
         if (category.id) {
-            return await this.db.categories.put(category);
+            await this.db.categories.update(category.id, category);
+            return category.id;
         } else {
             return await this.db.categories.add(category);
         }
     }
 
     async deleteCategory(id) {
-        return await this.db.categories.delete(id);
+        await this.db.categories.delete(id);
     }
 
     // Transactions
@@ -50,115 +56,73 @@ class DatabaseManager {
         return await this.db.transactions.toArray();
     }
 
-    async getTransactionsByCategory(categoryId) {
-        return await this.db.transactions.where('categoryId').equals(categoryId).toArray();
+    async getTransaction(id) {
+        return await this.db.transactions.get(id);
     }
 
     async saveTransaction(transaction) {
         if (transaction.id) {
-            return await this.db.transactions.put(transaction);
+            await this.db.transactions.update(transaction.id, transaction);
+            return transaction.id;
         } else {
             return await this.db.transactions.add(transaction);
         }
     }
 
     async deleteTransaction(id) {
-        return await this.db.transactions.delete(id);
+        await this.db.transactions.delete(id);
     }
 
-    async findDuplicateTransaction(transaction) {
-        const allTransactions = await this.db.transactions.toArray();
-        return allTransactions.find(t => 
-            t.encrypted_date === transaction.encrypted_date &&
-            t.encrypted_amount === transaction.encrypted_amount &&
-            t.encrypted_description === transaction.encrypted_description &&
-            t.encrypted_account === transaction.encrypted_account
-        );
+    async getTransactionsByCategory(categoryId) {
+        return await this.db.transactions.where('categoryId').equals(categoryId).toArray();
     }
 
-    // Account Mappings
-    async getAccountMapping(accountNumber) {
-        return await this.db.mappings_accounts.get(accountNumber);
-    }
-
-    async getAllAccountMappings() {
+    // Mappings
+    async getAllMappingsAccounts() {
         return await this.db.mappings_accounts.toArray();
     }
 
-    async saveAccountMapping(accountNumber, encryptedName) {
-        return await this.db.mappings_accounts.put({
+    async getAllMappingsDescriptions() {
+        return await this.db.mappings_descriptions.toArray();
+    }
+
+    async setMappingAccount(accountNumber, encryptedName) {
+        await this.db.mappings_accounts.put({
             account_number: accountNumber,
             encrypted_name: encryptedName
         });
     }
 
-    async deleteAccountMapping(accountNumber) {
-        return await this.db.mappings_accounts.delete(accountNumber);
-    }
-
-    // Description Mappings
-    async getDescriptionMapping(description) {
-        return await this.db.mappings_descriptions.get(description);
-    }
-
-    async getAllDescriptionMappings() {
-        return await this.db.mappings_descriptions.toArray();
-    }
-
-    async saveDescriptionMapping(description, encryptedCategory, encryptedPayee) {
-        return await this.db.mappings_descriptions.put({
+    async setMappingDescription(description, encryptedCategory, encryptedPayee) {
+        await this.db.mappings_descriptions.put({
             description: description,
             encrypted_category: encryptedCategory,
             encrypted_payee: encryptedPayee
         });
     }
 
-    async deleteDescriptionMapping(description) {
-        return await this.db.mappings_descriptions.delete(description);
+    async getCategoryBudget(categoryId, month) {
+        return await this.db.category_budgets.get([categoryId, month]);
     }
 
-    // Category Monthly Limits
-    async getCategoryMonthlyLimit(categoryId, monthKey) {
-        return await this.db.category_monthly_limits
-            .where(['categoryId', 'monthKey'])
-            .equals([categoryId, monthKey])
-            .first();
+    async setCategoryBudget(categoryId, month, encryptedLimit) {
+        await this.db.category_budgets.put({
+            categoryId: categoryId,
+            month: month,
+            encrypted_limit: encryptedLimit
+        });
     }
 
-    async saveCategoryMonthlyLimit(categoryId, monthKey, encryptedLimit) {
-        const existing = await this.getCategoryMonthlyLimit(categoryId, monthKey);
-        
-        if (existing) {
-            return await this.db.category_monthly_limits.put({
-                id: existing.id,
-                categoryId: categoryId,
-                monthKey: monthKey,
-                encrypted_limit: encryptedLimit
-            });
-        } else {
-            return await this.db.category_monthly_limits.add({
-                categoryId: categoryId,
-                monthKey: monthKey,
-                encrypted_limit: encryptedLimit
-            });
-        }
+    async getCategoryBudgetsForMonth(month) {
+        return await this.db.category_budgets.where('month').equals(month).toArray();
     }
 
-    async getCategoryLimitForMonth(categoryId, monthKey) {
-        // Check for month-specific override first
-        const monthlyLimit = await this.getCategoryMonthlyLimit(categoryId, monthKey);
-        if (monthlyLimit) {
-            return monthlyLimit.encrypted_limit;
-        }
-        
-        // Fall back to default category limit
-        const category = await this.getCategory(categoryId);
-        return category ? category.encrypted_limit : null;
+    async bulkAddTransactions(transactions) {
+        return await this.db.transactions.bulkAdd(transactions);
     }
 
-    // Utility
     async clearAllData() {
         await this.db.delete();
-        location.reload();
+        await this.db.open();
     }
 }

@@ -12,12 +12,20 @@
     <title>Vault Budget</title>
     
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="css/styles.css">
+    <!-- Modular CSS -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/pages.css">
+    <link rel="stylesheet" href="css/utilities.css">
     
-    <!-- External Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <!-- External Libraries (CDN) -->
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/dexie@latest/dist/dexie.min.js"></script>
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+    <!-- Main Application (ES Module) -->
+    <script type="module" src="main.js"></script>
 </head>
 <body>
     <div id="app">
@@ -89,31 +97,152 @@
                     <div class="summary-label">Income</div>
                     <div class="summary-value">$0.00</div>
                 </div>
-                <div class="summary-card expenses">
-                    <div class="summary-label">Expenses</div>
+                <div class="summary-card spent">
+                    <div class="summary-label">Outflow</div>
                     <div class="summary-value">$0.00</div>
                 </div>
-                <div class="summary-card savings">
-                    <div class="summary-label">Savings</div>
+                <div class="summary-card remaining">
+                    <div class="summary-label">Remaining</div>
                     <div class="summary-value">$0.00</div>
                 </div>
-            </div>
-            
-            <!-- Add Bar (only visible on Transactions tab) -->
-            <div class="add-bar">
-                <button class="btn-primary" id="add-transaction-btn">
-                    <i data-lucide="plus"></i>
-                    <span>Add Transaction</span>
-                </button>
-                <button class="btn-secondary" id="import-csv-btn">
-                    <i data-lucide="upload"></i>
-                    <span>Import CSV</span>
-                </button>
             </div>
             
             <!-- Tab Content -->
             <main>
                 <div id="tab-transactions" class="tab-content active">
+                    <!-- Search Bar -->
+                    <div class="search-bar">
+                        <div class="search-input-wrapper">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="transaction-search" placeholder="Search descriptions..." />
+                        </div>
+                        <button class="search-menu-btn" id="advanced-search-toggle">
+                            <i data-lucide="menu"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Advanced Search Panel -->
+                    <div class="advanced-search-panel hidden" id="advanced-search-panel">
+                        <div class="advanced-scroll-container">
+                            <div class="advanced-section">
+                                <h4 class="section-toggle">
+                                    <span>Search In</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content">
+                                    <div class="checkbox-group">
+                                        <label><input type="checkbox" id="search-description" checked> Description</label>
+                                        <label><input type="checkbox" id="search-account"> Account</label>
+                                        <label><input type="checkbox" id="search-category"> Category</label>
+                                        <label><input type="checkbox" id="search-note"> Note</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle">
+                                    <span>Sort By</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content">
+                                    <select id="sort-field">
+                                        <option value="date">Date</option>
+                                        <option value="amount">Amount</option>
+                                        <option value="description">Description</option>
+                                        <option value="category">Category</option>
+                                        <option value="account">Account</option>
+                                    </select>
+                                    <select id="sort-order">
+                                        <option value="desc">Descending</option>
+                                        <option value="asc">Ascending</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Category</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="filter-select-wrapper">
+                                            <input type="text" id="filter-category-search" placeholder="Search categories..." />
+                                            <select id="filter-category" multiple size="4"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Account</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="filter-select-wrapper">
+                                            <input type="text" id="filter-account-search" placeholder="Search accounts..." />
+                                            <select id="filter-account" multiple size="4"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Description</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="filter-select-wrapper">
+                                            <input type="text" id="filter-description-search" placeholder="Search descriptions..." />
+                                            <select id="filter-description" multiple size="4"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Amount</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="range-inputs">
+                                            <input type="number" id="filter-amount-min" placeholder="Min" step="0.01" />
+                                            <span>to</span>
+                                            <input type="number" id="filter-amount-max" placeholder="Max" step="0.01" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Date</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="range-inputs">
+                                            <input type="date" id="filter-date-start" />
+                                            <span>to</span>
+                                            <input type="date" id="filter-date-end" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="advanced-actions">
+                            <button class="btn-secondary" id="clear-filters">Clear All</button>
+                            <button class="btn-primary" id="apply-filters">Apply</button>
+                        </div>
+                    </div>
+                    
                     <div id="transactions-list"></div>
                 </div>
                 
@@ -132,7 +261,48 @@
                 <div id="tab-settings" class="tab-content">
                     <div id="settings-content"></div>
                 </div>
+                
+                <!-- CSV Import Page (Not in bottom nav, accessed via FAB) -->
+                <div id="csv-import-page" class="tab-content hidden">
+                    <div class="page-header">
+                        <button id="csv-import-back" class="btn-icon">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <h2>Import CSV</h2>
+                    </div>
+                    <div id="csv-import-content"></div>
+                </div>
             </main>
+            
+            <!-- FAB for Transactions (hidden on other tabs) -->
+            <button class="fab hidden" id="fab-add-transaction">
+                <i data-lucide="plus"></i>
+            </button>
+            
+            <!-- FAB Popup Menu -->
+            <div class="fab-menu hidden" id="fab-transaction-menu">
+                <button class="fab-menu-item" id="fab-manual-entry">
+                    <i data-lucide="edit-3"></i>
+                    <span>Manual Entry</span>
+                </button>
+                <button class="fab-menu-item" id="fab-import-csv">
+                    <i data-lucide="upload"></i>
+                    <span>Import CSV</span>
+                </button>
+                <button class="fab-menu-item" id="fab-undo" disabled>
+                    <i data-lucide="undo"></i>
+                    <span>Undo Last Add</span>
+                </button>
+                <button class="fab-menu-item" id="fab-redo" disabled>
+                    <i data-lucide="redo"></i>
+                    <span>Redo Last Add</span>
+                </button>
+            </div>
+            
+            <!-- Add Bar (for Transactions and Mappings) -->
+            <div class="add-bar" style="display: none;">
+                <!-- Content populated dynamically by renderTransactionsTab() or renderMappingsTab() -->
+            </div>
             
             <!-- Bottom Navigation -->
             <nav class="bottom-nav">
@@ -273,12 +443,7 @@
         </div>
     </div>
     
-    <!-- Scripts - Load in correct order -->
-    <script src="js/security-manager.js"></script>
-    <script src="js/database.js"></script>
-    <script src="js/csv-importer.js"></script>
-    <script src="app.js"></script>
-    
+    <!-- Lucide Icons Initialization -->
     <script>
         // Initialize Lucide icons after DOM loads
         document.addEventListener('DOMContentLoaded', () => {

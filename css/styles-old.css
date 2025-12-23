@@ -206,6 +206,29 @@ input, select, textarea {
     height: 20px;
 }
 
+.btn-icon-danger {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+}
+
+.btn-icon-danger:hover {
+    opacity: 0.9;
+}
+
+.btn-icon-danger i {
+    width: 20px;
+    height: 20px;
+}
+
 .icon-btn {
     background: none;
     border: none;
@@ -555,6 +578,22 @@ input, select, textarea {
     letter-spacing: 0.8px;
     margin-bottom: 12px;
     padding-left: 4px;
+}
+
+.group-header.income-header {
+    color: var(--success-color);
+}
+
+.group-header.expense-header {
+    color: var(--danger-color);
+}
+
+.group-header.saving-header {
+    color: var(--accent-color);
+}
+
+.group-header.transfer-header {
+    color: var(--text-secondary);
 }
 
 .category-card {
@@ -1138,9 +1177,11 @@ input, select, textarea {
     display: flex;
     gap: 12px;
     margin-top: 24px;
+    align-items: center;
 }
 
-.modal-actions .btn-danger {
+.modal-actions .btn-danger,
+.modal-actions .btn-icon-danger {
     flex: 0 0 auto;
     margin-right: auto;
 }
@@ -1148,6 +1189,48 @@ input, select, textarea {
 .modal-actions .btn-secondary,
 .modal-actions .btn-primary {
     flex: 1;
+}
+
+.modal-actions .btn-primary {
+    padding: 12px;
+    width: auto;
+    min-width: 48px;
+}
+
+/* === CHART LEGEND === */
+.chart-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 0 20px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+}
+
+.legend-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.legend-label {
+    color: var(--text-primary);
+    flex: 1;
+}
+
+/* === SUMMARY TABLE TOTAL ROW === */
+.details-table-row.total-row {
+    border-top: 2px solid var(--border-color);
+    margin-top: 8px;
+    padding-top: 8px;
+    background: var(--bg-tertiary);
 }
 
 /* === MONTH SCOPE MODAL === */

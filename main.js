@@ -1,9 +1,9 @@
 // Main Application Entry Point - Modular ES6 Version
 // Uses global CDN variables: Dexie, Papa, lucide
-import { SecurityManager } from './js/security.js';
-import { DatabaseManager } from './js/database.js';
-import { CSVEngine } from './js/csv-importer.js';
-import { UIManager } from './js/ui.js';
+import { SecurityManager } from './js/core/security.js';
+import { DatabaseManager } from './js/core/database.js';
+import { CSVEngine } from './js/core/csv-engine.js';
+import { UIManager } from './js/ui/ui-manager.js';
 
 class App {
     constructor() {

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2.23.7'; // CSV import now a dedicated page; Fixed search indexing bug
+const CACHE_VERSION = 'v2.24.0'; // Major refactor: modular architecture (/js/core, /js/ui), extracted mappings, settings, modal-manager
 const CACHE_NAME = `vault-budget-${CACHE_VERSION}`;
 
 // Cache only local files that exist
@@ -6,14 +6,20 @@ const urlsToCache = [
     '/',
     '/index.html',
     '/main.js',
-    '/js/security.js',
-    '/js/database.js',
-    '/js/csv-importer.js',
-    '/js/ui.js',
+    '/js/core/security.js',
+    '/js/core/database.js',
+    '/js/core/csv-engine.js',
+    '/js/core/csv-validator.js',
+    '/js/core/csv-mapper.js',
+    '/js/ui/ui-manager.js',
     '/js/ui/auth-ui.js',
     '/js/ui/transaction-ui.js',
     '/js/ui/budget-ui.js',
     '/js/ui/summary-ui.js',
+    '/js/ui/mappings-ui.js',
+    '/js/ui/settings-ui.js',
+    '/js/ui/modal-manager.js',
+    '/js/ui/csv-review-ui.js',
     '/css/base.css',
     '/css/components.css',
     '/css/layout.css',

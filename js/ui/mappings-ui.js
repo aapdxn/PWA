@@ -85,7 +85,7 @@ export class MappingsUI {
             let mappingsHTML = '';
             for (const mapping of mappingsData) {
                 mappingsHTML += `
-                    <div class="mapping-item" data-description="${mapping.description.toLowerCase()}" data-category="${mapping.categoryName.toLowerCase()}" data-payee="${mapping.payeeName.toLowerCase()}" style="padding: 12px; margin-bottom: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='var(--bg-primary)'">
+                    <div class="mapping-item" data-description-original="${mapping.description}" data-description="${mapping.description.toLowerCase()}" data-category="${mapping.categoryName.toLowerCase()}" data-payee="${mapping.payeeName.toLowerCase()}" style="padding: 12px; margin-bottom: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='var(--bg-primary)'">
                         <div style="font-weight: 600; color: var(--text-primary);">${mapping.description}</div>
                         ${mapping.payeeName ? `<div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 4px;">Payee: ${mapping.payeeName}</div>` : ''}
                         <div style="font-size: 0.875rem; color: var(--accent); margin-top: 4px;">→ ${mapping.categoryName}</div>

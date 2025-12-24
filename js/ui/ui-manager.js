@@ -68,6 +68,10 @@ export class UIManager {
                 document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
                 navItem.classList.add('active');
                 this.currentTab = tab;
+                
+                // Close all FAB menus when switching tabs
+                document.querySelectorAll('.fab-menu').forEach(menu => menu.classList.add('hidden'));
+                
                 this.showTab(tab);
             }
             
@@ -132,9 +136,9 @@ export class UIManager {
             }
             
             // Mappings
-            const mappingItem = e.target.closest('.mapping-item[data-description]');
+            const mappingItem = e.target.closest('.mapping-item[data-description-original]');
             if (mappingItem && this.currentTab === 'mappings') {
-                const description = mappingItem.dataset.description;
+                const description = mappingItem.dataset.descriptionOriginal;
                 await this.mappingsUI.openMappingForEdit(description);
             }
             
@@ -244,11 +248,11 @@ export class UIManager {
                     const text = btn.querySelector('.btn-text');
                     
                     if (detailsDiv.classList.contains('hidden')) {
-                        text.textContent = 'Show Details';
-                        icon.setAttribute('data-lucide', 'chevron-down');
+                        if (text) text.textContent = 'Show Details';
+                        if (icon) icon.setAttribute('data-lucide', 'chevron-down');
                     } else {
-                        text.textContent = 'Hide Details';
-                        icon.setAttribute('data-lucide', 'chevron-up');
+                        if (text) text.textContent = 'Hide Details';
+                        if (icon) icon.setAttribute('data-lucide', 'chevron-up');
                     }
                     
                     if (typeof lucide !== 'undefined') lucide.createIcons();

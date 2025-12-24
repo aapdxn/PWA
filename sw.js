@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2.26.2'; // Fixed: Category edit modal now shows/saves monthly budget amounts correctly
+const CACHE_VERSION = 'v2.26.5'; // Fixed: FAB menus now close when switching tabs
 const CACHE_NAME = `vault-budget-${CACHE_VERSION}`;
 
 // Cache only local files that exist

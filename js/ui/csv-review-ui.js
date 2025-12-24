@@ -29,115 +29,117 @@ export class CSVReviewUI {
             this.uiManager = uiManager;
         }
         
-        // Build page HTML
+        // Build page HTML with fixed bottom buttons
         const pageHTML = `
-            <div style="padding: 1rem; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
-                <p style="margin: 0; font-weight: 600;"><strong id="csv-total-count">${processedData.length}</strong> transactions (<span id="csv-visible-count">${processedData.length}</span> visible)</p>
-                <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem; color: var(--text-secondary);">Set mappings for each description - once set, they'll auto-apply to matching transactions in this import</p>
-            </div>
-            
-            <!-- Search and Filter -->
-            <div class="csv-search-filter" style="padding: 1rem; background: var(--bg-primary); border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
-                <div class="search-bar" style="margin-bottom: 0.75rem;">
-                    <div class="search-input-wrapper">
-                        <i data-lucide="search"></i>
-                        <input type="text" id="csv-search-input" placeholder="Search descriptions..." />
-                    </div>
-                    <button class="search-menu-btn" id="csv-advanced-search-toggle">
-                        <i data-lucide="sliders-horizontal"></i>
-                    </button>
+            <div style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
+                <div style="padding: 1rem; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+                    <p style="margin: 0; font-weight: 600;"><strong id="csv-total-count">${processedData.length}</strong> transactions (<span id="csv-visible-count">${processedData.length}</span> visible)</p>
+                    <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem; color: var(--text-secondary);">Set mappings for each description - once set, they'll auto-apply to matching transactions in this import</p>
                 </div>
                 
-                <!-- Advanced Search/Filter Panel -->
-                <div class="advanced-search-panel hidden" id="csv-advanced-search-panel" style="position: relative; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.75rem; max-height: 60vh; overflow: hidden; display: flex; flex-direction: column;">
-                    <div class="advanced-scroll-container" style="flex: 1; overflow-y: auto; padding: 1rem;">
-                        <div class="advanced-section">
-                            <h4 class="section-toggle csv-section-toggle">
-                                <span>Quick Filters</span>
-                                <i data-lucide="chevron-down"></i>
-                            </h4>
-                            <div class="advanced-section-content">
-                                <div class="checkbox-group">
-                                    <label><input type="checkbox" id="csv-filter-duplicates"> Hide Duplicates</label>
-                                    <label><input type="checkbox" id="csv-filter-unmapped"> Show Only Unmapped</label>
-                                    <label><input type="checkbox" id="csv-filter-auto"> Show Only Auto-Mapped</label>
+                <!-- Search and Filter -->
+                <div class="csv-search-filter" style="padding: 1rem; background: var(--bg-primary); border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+                    <div class="search-bar" style="margin-bottom: 0.75rem;">
+                        <div class="search-input-wrapper">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="csv-search-input" placeholder="Search descriptions..." />
+                        </div>
+                        <button class="search-menu-btn" id="csv-advanced-search-toggle">
+                            <i data-lucide="sliders-horizontal"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Advanced Search/Filter Panel -->
+                    <div class="advanced-search-panel hidden" id="csv-advanced-search-panel" style="position: relative; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.75rem; max-height: 60vh; overflow: hidden; display: flex; flex-direction: column;">
+                        <div class="advanced-scroll-container" style="flex: 1; overflow-y: auto; padding: 1rem;">
+                            <div class="advanced-section">
+                                <h4 class="section-toggle csv-section-toggle">
+                                    <span>Quick Filters</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content">
+                                    <div class="checkbox-group">
+                                        <label><input type="checkbox" id="csv-filter-duplicates"> Hide Duplicates</label>
+                                        <label><input type="checkbox" id="csv-filter-unmapped"> Show Only Unmapped</label>
+                                        <label><input type="checkbox" id="csv-filter-auto"> Show Only Auto-Mapped</label>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="advanced-section">
-                            <h4 class="section-toggle csv-section-toggle">
-                                <span>Sort By</span>
-                                <i data-lucide="chevron-down"></i>
-                            </h4>
-                            <div class="advanced-section-content">
-                                <select id="csv-sort-field">
-                                    <option value="date">Date</option>
-                                    <option value="amount">Amount</option>
-                                    <option value="description">Description</option>
-                                    <option value="account">Account</option>
-                                </select>
-                                <select id="csv-sort-order">
-                                    <option value="desc">Descending</option>
-                                    <option value="asc">Ascending</option>
-                                </select>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle csv-section-toggle">
+                                    <span>Sort By</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content">
+                                    <select id="csv-sort-field">
+                                        <option value="date">Date</option>
+                                        <option value="amount">Amount</option>
+                                        <option value="description">Description</option>
+                                        <option value="account">Account</option>
+                                    </select>
+                                    <select id="csv-sort-order">
+                                        <option value="desc">Descending</option>
+                                        <option value="asc">Ascending</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                        
-                        <div class="advanced-section">
-                            <h4 class="section-toggle csv-section-toggle collapsed">
-                                <span>Filter by Amount</span>
-                                <i data-lucide="chevron-down"></i>
-                            </h4>
-                            <div class="advanced-section-content collapsed">
-                                <div class="filter-group">
-                                    <div class="range-inputs">
-                                        <input type="number" id="csv-filter-amount-min" placeholder="Min" step="0.01" />
-                                        <span>to</span>
-                                        <input type="number" id="csv-filter-amount-max" placeholder="Max" step="0.01" />
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle csv-section-toggle collapsed">
+                                    <span>Filter by Amount</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="range-inputs">
+                                            <input type="number" id="csv-filter-amount-min" placeholder="Min" step="0.01" />
+                                            <span>to</span>
+                                            <input type="number" id="csv-filter-amount-max" placeholder="Max" step="0.01" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle csv-section-toggle collapsed">
+                                    <span>Filter by Date</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="range-inputs">
+                                            <input type="date" id="csv-filter-date-start" />
+                                            <span>to</span>
+                                            <input type="date" id="csv-filter-date-end" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="advanced-section">
-                            <h4 class="section-toggle csv-section-toggle collapsed">
-                                <span>Filter by Date</span>
-                                <i data-lucide="chevron-down"></i>
-                            </h4>
-                            <div class="advanced-section-content collapsed">
-                                <div class="filter-group">
-                                    <div class="range-inputs">
-                                        <input type="date" id="csv-filter-date-start" />
-                                        <span>to</span>
-                                        <input type="date" id="csv-filter-date-end" />
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="advanced-actions" style="flex-shrink: 0; padding: 1rem; border-top: 1px solid var(--border-color); background: var(--bg-primary);">
+                            <button class="btn-secondary" id="csv-clear-filters">Clear All</button>
+                            <button class="btn-primary" id="csv-apply-filters">Apply</button>
                         </div>
                     </div>
                     
-                    <div class="advanced-actions" style="flex-shrink: 0; padding: 1rem; border-top: 1px solid var(--border-color); background: var(--bg-primary);">
-                        <button class="btn-secondary" id="csv-clear-filters">Clear All</button>
-                        <button class="btn-primary" id="csv-apply-filters">Apply</button>
+                    <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 0.75rem;">
+                        <button class="btn-secondary" id="csv-skip-all" style="width: auto; padding: 0.5rem 1rem; font-size: 0.875rem; margin-left: auto;">
+                            <i data-lucide="x-circle"></i>
+                            Skip All Visible
+                        </button>
                     </div>
                 </div>
                 
-                <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 0.75rem;">
-                    <button class="btn-secondary" id="csv-skip-all" style="width: auto; padding: 0.5rem 1rem; font-size: 0.875rem; margin-left: auto;">
-                        <i data-lucide="x-circle"></i>
-                        Skip All Visible
-                    </button>
+                <div id="csv-review-list" style="flex: 1; overflow-y: auto; padding: 1rem; padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);">
+                    ${await this.buildCSVReviewList(processedData, allCategories)}
                 </div>
-            </div>
-            
-            <div id="csv-review-list" style="flex: 1; overflow-y: auto; padding: 1rem;">
-                ${await this.buildCSVReviewList(processedData, allCategories)}
-            </div>
-            
-            <div style="display: flex; gap: 1rem; padding: 1rem; background: var(--bg-secondary); border-top: 1px solid var(--border-color); flex-shrink: 0;">
-                <button class="btn btn-secondary" id="csv-review-cancel" style="flex: 1;">Cancel</button>
-                <button class="btn btn-primary" id="csv-review-import" style="flex: 1;">Import Selected</button>
+                
+                <div style="display: flex; gap: 1rem; padding: 1rem; padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); background: var(--bg-secondary); border-top: 1px solid var(--border-color); flex-shrink: 0; position: sticky; bottom: 0; z-index: 10;">
+                    <button class="btn btn-secondary" id="csv-review-cancel" style="flex: 1;">Cancel</button>
+                    <button class="btn btn-primary" id="csv-review-import" style="flex: 1;">Import Selected</button>
+                </div>
             </div>
         `;
         
@@ -607,8 +609,17 @@ export class CSVReviewUI {
             return;
         }
         
+        // Prepare items for import - ensure categoryId is set for auto-mapped items
+        const preparedItems = toImport.map(item => {
+            // If categoryId is not set but suggestedCategoryId is, use it (Auto mode)
+            if (!item.categoryId && item.suggestedCategoryId) {
+                return { ...item, categoryId: item.suggestedCategoryId };
+            }
+            return item;
+        });
+        
         try {
-            const imported = await csvEngine.importReviewedTransactions(toImport);
+            const imported = await csvEngine.importReviewedTransactions(preparedItems);
             alert(`Successfully imported ${imported.length} transaction(s)`);
             
             // Trigger transaction refresh if available

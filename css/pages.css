@@ -39,8 +39,9 @@
 
 #csv-import-content {
     flex: 1;
-    overflow-y: auto;
-    padding-bottom: env(safe-area-inset-bottom);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* === TRANSACTIONS PAGE === */

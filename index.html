@@ -279,6 +279,11 @@
                 <i data-lucide="plus"></i>
             </button>
             
+            <!-- FAB for Mappings (hidden on other tabs) -->
+            <button class="fab hidden" id="fab-add-mapping">
+                <i data-lucide="plus"></i>
+            </button>
+            
             <!-- FAB Popup Menu -->
             <div class="fab-menu hidden" id="fab-transaction-menu">
                 <button class="fab-menu-item" id="fab-manual-entry">
@@ -299,9 +304,16 @@
                 </button>
             </div>
             
-            <!-- Add Bar (for Transactions and Mappings) -->
-            <div class="add-bar" style="display: none;">
-                <!-- Content populated dynamically by renderTransactionsTab() or renderMappingsTab() -->
+            <!-- FAB Menu for Mappings -->
+            <div class="fab-menu hidden" id="fab-mapping-menu">
+                <button class="fab-menu-item" id="fab-mapping-manual">
+                    <i data-lucide="edit-3"></i>
+                    <span>Manual Entry</span>
+                </button>
+                <button class="fab-menu-item" id="fab-mapping-import">
+                    <i data-lucide="upload"></i>
+                    <span>Import CSV</span>
+                </button>
             </div>
             
             <!-- Bottom Navigation -->

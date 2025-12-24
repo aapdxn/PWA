@@ -57,16 +57,16 @@ export class MappingsUI {
             ).join('');
             
             const headerHTML = `
-                <div style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 10; padding: 16px; border-bottom: 1px solid var(--border-color);">
-                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                        <div style="flex: 1; position: relative;">
-                            <i data-lucide="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-secondary);"></i>
-                            <input type="text" id="mappings-search" placeholder="Search mappings..." style="width: 100%; padding: 10px 10px 10px 40px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);">
-                        </div>
-                        <button id="mappings-filter-toggle" class="btn-secondary" style="padding: 10px 16px;">
-                            <i data-lucide="sliders"></i>
-                        </button>
+                <div class="search-bar">
+                    <div class="search-input-wrapper">
+                        <i data-lucide="search"></i>
+                        <input type="text" id="mappings-search" placeholder="Search mappings..." />
                     </div>
+                    <button class="search-menu-btn" id="mappings-filter-toggle">
+                        <i data-lucide="sliders"></i>
+                    </button>
+                </div>
+                <div style="position: sticky; top: 44px; background: var(--bg-secondary); z-index: 10; padding: 0 16px; border-bottom: 1px solid var(--border-color);">
                     <div id="mappings-filter-panel" class="hidden" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-top: 8px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <strong>Filter by Category</strong>
@@ -85,7 +85,7 @@ export class MappingsUI {
             let mappingsHTML = '';
             for (const mapping of mappingsData) {
                 mappingsHTML += `
-                    <div class="mapping-item" data-description="${mapping.description.toLowerCase()}" data-category="${mapping.categoryName.toLowerCase()}" data-payee="${mapping.payeeName.toLowerCase()}" style="padding: 12px; margin-bottom: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px;">
+                    <div class="mapping-item" data-description="${mapping.description.toLowerCase()}" data-category="${mapping.categoryName.toLowerCase()}" data-payee="${mapping.payeeName.toLowerCase()}" style="padding: 12px; margin-bottom: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='var(--bg-primary)'">
                         <div style="font-weight: 600; color: var(--text-primary);">${mapping.description}</div>
                         ${mapping.payeeName ? `<div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 4px;">Payee: ${mapping.payeeName}</div>` : ''}
                         <div style="font-size: 0.875rem; color: var(--accent); margin-top: 4px;">→ ${mapping.categoryName}</div>
@@ -130,17 +130,6 @@ export class MappingsUI {
             }
         }
         
-        const addBar = document.querySelector('.add-bar');
-        if (addBar) {
-            addBar.innerHTML = `
-                <button class="btn-add" id="add-mapping-btn">
-                    <i data-lucide="plus"></i>
-                    Add Mapping
-                </button>
-            `;
-            addBar.style.display = 'flex';
-        }
-        
         if (!document.getElementById('import-mappings-input')) {
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
@@ -158,6 +147,8 @@ export class MappingsUI {
                     try {
                         const processedMappings = await this.csvEngine.processMappingsCSV(e.target.files);
                         
+                        console.log('📥 Processed mappings from CSV:', processedMappings);
+                        
                         if (processedMappings.length === 0) {
                             alert('No valid mappings found in CSV');
                             return;
@@ -168,6 +159,8 @@ export class MappingsUI {
                                 .filter(m => !m.categoryId && m.categoryName)
                                 .map(m => m.categoryName)
                         )];
+                        
+                        console.log('🔍 Unmapped categories:', unmappedCategories);
                         
                         if (unmappedCategories.length > 0) {
                             const categoryResolutions = await this.modalManager.showCategoryResolutionModal(unmappedCategories);
@@ -202,51 +195,52 @@ export class MappingsUI {
         }
     }
 
-    showAddMappingModal() {
-        const modalHTML = `
-            <div class="modal-overlay" id="add-mapping-choice-modal">
-                <div class="modal-content" style="max-width: 400px;">
-                    <div class="modal-header">
-                        <h2>Add Mapping</h2>
-                    </div>
-                    <div class="modal-body">
-                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">Choose how to add mappings:</p>
-                        <button class="btn-primary" id="add-mapping-manual" style="width: 100%; margin-bottom: 12px;">
-                            <i data-lucide="edit-3"></i>
-                            Manual Entry
-                        </button>
-                        <button class="btn-secondary" id="add-mapping-import" style="width: 100%;">
-                            <i data-lucide="upload"></i>
-                            Import CSV
-                        </button>
-                    </div>
-                    <div class="modal-actions">
-                        <button class="btn btn-secondary" id="cancel-add-mapping">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        `;
+    toggleMappingFabMenu() {
+        const menu = document.getElementById('fab-mapping-menu');
+        if (menu) {
+            menu.classList.toggle('hidden');
+        }
+    }
+
+    async openMappingForEdit(description) {
+        // Find the mapping by description
+        const allMappings = await this.db.getAllMappingsDescriptions();
+        const mapping = allMappings.find(m => m.description === description);
         
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        const modal = document.getElementById('add-mapping-choice-modal');
+        if (!mapping) {
+            console.error('Mapping not found:', description);
+            return;
+        }
         
-        modal.querySelector('#add-mapping-manual').addEventListener('click', () => {
-            modal.remove();
-            this.showManualMappingModal();
+        // Decrypt the mapping data
+        const categoryName = mapping.encrypted_category ? await this.security.decrypt(mapping.encrypted_category) : '';
+        const payeeName = mapping.encrypted_payee ? await this.security.decrypt(mapping.encrypted_payee) : '';
+        
+        // Find the category ID from the category name
+        const allCategories = await this.db.getAllCategories();
+        let selectedCategoryId = null;
+        
+        for (const cat of allCategories) {
+            const name = await this.security.decrypt(cat.encrypted_name);
+            if (name === categoryName) {
+                selectedCategoryId = cat.id;
+                break;
+            }
+        }
+        
+        // Open the modal with pre-filled data
+        await this.showManualMappingModal({
+            description: mapping.description,
+            encrypted_payee: mapping.encrypted_payee,
+            categoryId: selectedCategoryId
         });
         
-        modal.querySelector('#add-mapping-import').addEventListener('click', () => {
-            modal.remove();
-            const input = document.getElementById('import-mappings-input');
-            if (input) input.click();
-        });
-        
-        modal.querySelector('#cancel-add-mapping').addEventListener('click', () => {
-            modal.remove();
-        });
-        
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
+        // Pre-select the category in the dropdown
+        if (selectedCategoryId) {
+            const categorySelect = document.getElementById('mapping-category');
+            if (categorySelect) {
+                categorySelect.value = selectedCategoryId;
+            }
         }
     }
 
@@ -263,58 +257,143 @@ export class MappingsUI {
             <div class="modal-overlay" id="manual-mapping-modal">
                 <div class="modal-content" style="max-width: 500px;">
                     <div class="modal-header">
-                        <h2>${isEdit ? 'Edit' : 'Add'} Mapping</h2>
+                        <h3>${isEdit ? 'Edit' : 'Add'} Mapping</h3>
+                        <button class="icon-btn close-modal" id="close-mapping-modal">
+                            <i data-lucide="x"></i>
+                        </button>
                     </div>
-                    <div class="modal-body">
-                        <form id="mapping-form">
-                            <div class="form-group">
-                                <label>Description (Transaction text to match)</label>
-                                <input type="text" id="mapping-description" placeholder="E.g., STARBUCKS" value="${mapping ? mapping.description : ''}" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Payee (Optional)</label>
-                                <input type="text" id="mapping-payee" placeholder="E.g., Starbucks Coffee">
-                            </div>
-                            <div class="form-group">
-                                <label>Category</label>
-                                <select id="mapping-category" required>
-                                    <option value="">Select category...</option>
-                                    ${categoryOptions.join('')}
-                                </select>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-actions">
-                        <button class="btn btn-secondary" id="cancel-mapping">Cancel</button>
-                        <button class="btn btn-primary" id="save-mapping">Save</button>
-                    </div>
+                    <form id="mapping-form">
+                        <div class="input-group">
+                            <label for="mapping-description">Description (Transaction text to match)</label>
+                            <input type="text" id="mapping-description" placeholder="E.g., STARBUCKS" value="${mapping ? mapping.description : ''}" required autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label for="mapping-payee">Payee (Optional)</label>
+                            <input type="text" id="mapping-payee" placeholder="E.g., Starbucks Coffee" autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label for="mapping-category">Category</label>
+                            <select id="mapping-category" required>
+                                <option value="">Select category...</option>
+                                ${categoryOptions.join('')}
+                            </select>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-mapping">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="save-mapping">Save</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         `;
         
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         const modal = document.getElementById('manual-mapping-modal');
+        const form = document.getElementById('mapping-form');
+        
+        // Make description readonly in edit mode (it's the primary key)
+        if (isEdit) {
+            document.getElementById('mapping-description').readOnly = true;
+            document.getElementById('mapping-description').style.opacity = '0.6';
+            
+            // Add delete button for edit mode
+            let deleteBtn = document.getElementById('delete-mapping-btn');
+            if (!deleteBtn) {
+                deleteBtn = document.createElement('button');
+                deleteBtn.id = 'delete-mapping-btn';
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'btn-icon-danger';
+                deleteBtn.innerHTML = '<i data-lucide="trash-2"></i>';
+                deleteBtn.title = 'Delete';
+                const modalActions = modal.querySelector('.modal-actions');
+                if (modalActions) {
+                    modalActions.insertBefore(deleteBtn, modalActions.firstChild);
+                }
+            }
+            deleteBtn.classList.remove('hidden');
+            
+            // Change save button to checkmark icon
+            const saveBtn = document.getElementById('save-mapping');
+            if (saveBtn) {
+                saveBtn.innerHTML = '<i data-lucide="check"></i>';
+                saveBtn.title = 'Save';
+            }
+        } else {
+            // Hide delete button in add mode
+            const deleteBtn = document.getElementById('delete-mapping-btn');
+            if (deleteBtn) {
+                deleteBtn.classList.add('hidden');
+            }
+            
+            // Reset save button text
+            const saveBtn = document.getElementById('save-mapping');
+            if (saveBtn) {
+                saveBtn.innerHTML = 'Save';
+                saveBtn.title = '';
+            }
+        }
         
         if (mapping && mapping.encrypted_payee) {
             const payee = await this.security.decrypt(mapping.encrypted_payee);
             document.getElementById('mapping-payee').value = payee;
         }
         
-        modal.querySelector('#save-mapping').addEventListener('click', async () => {
-            const description = document.getElementById('mapping-description').value.trim();
-            const payee = document.getElementById('mapping-payee').value.trim();
-            const categoryId = parseInt(document.getElementById('mapping-category').value);
-            
-            if (!description) {
-                alert('Please enter a description');
-                return;
+        // Handle form submission
+        const mappingForm = document.getElementById('mapping-form');
+        mappingForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.saveMappingFromForm(categories, mapping);
+        });
+        
+        modal.querySelector('#save-mapping').addEventListener('click', async (e) => {
+            e.preventDefault();
+            await this.saveMappingFromForm(categories, mapping);
+        });
+        
+        modal.querySelector('#cancel-mapping').addEventListener('click', () => {
+            modal.remove();
+        });
+        
+        // Close button (X)
+        modal.querySelector('#close-mapping-modal').addEventListener('click', () => {
+            modal.remove();
+        });
+        
+        // Delete button event listener (will be present if in edit mode)
+        if (isEdit) {
+            const deleteBtn = modal.querySelector('#delete-mapping-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', async () => {
+                    if (confirm(`Delete mapping for "${mapping.description}"?`)) {
+                        await this.db.deleteMappingDescription(mapping.description);
+                        modal.remove();
+                        await this.renderMappingsTab();
+                    }
+                });
             }
-            
-            if (!categoryId) {
-                alert('Please select a category');
-                return;
-            }
-            
+        }
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    async saveMappingFromForm(categories, mapping) {
+        const description = document.getElementById('mapping-description').value.trim();
+        const payee = document.getElementById('mapping-payee').value.trim();
+        const categoryId = parseInt(document.getElementById('mapping-category').value);
+        
+        if (!description) {
+            alert('Please enter a description');
+            return;
+        }
+        
+        if (!categoryId) {
+            alert('Please select a category');
+            return;
+        }
+        
+        try {
             const category = categories.find(c => c.id === categoryId);
             const categoryName = await this.security.decrypt(category.encrypted_name);
             
@@ -324,16 +403,12 @@ export class MappingsUI {
                 payee ? await this.security.encrypt(payee) : ''
             );
             
-            modal.remove();
+            const modal = document.getElementById('manual-mapping-modal');
+            if (modal) modal.remove();
             await this.renderMappingsTab();
-        });
-        
-        modal.querySelector('#cancel-mapping').addEventListener('click', () => {
-            modal.remove();
-        });
-        
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
+        } catch (error) {
+            console.error('❌ Save mapping failed:', error);
+            alert('Failed to save mapping: ' + error.message);
         }
     }
 

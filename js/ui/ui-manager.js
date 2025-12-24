@@ -25,6 +25,9 @@ export class UIManager {
         this.mappingsUI = new MappingsUI(security, db, csvEngine, this.modalManager);
         this.settingsUI = new SettingsUI(security, db);
         
+        // Expose budgetUI globally for onclick handlers
+        window.budgetUI = this.budgetUI;
+        
         // Set parent references
         this.transactionUI.uiManager = this;
         this.csvReviewUI.onImportSuccess = async () => {
@@ -128,6 +131,13 @@ export class UIManager {
                 await this.transactionUI.openTransactionModal(transactionId);
             }
             
+            // Mappings
+            const mappingItem = e.target.closest('.mapping-item[data-description]');
+            if (mappingItem && this.currentTab === 'mappings') {
+                const description = mappingItem.dataset.description;
+                await this.mappingsUI.openMappingForEdit(description);
+            }
+            
             if (e.target.closest('#transaction-form-submit')) {
                 e.preventDefault();
                 await this.transactionUI.saveTransaction(async () => {
@@ -145,8 +155,11 @@ export class UIManager {
             }
             
             // Categories
-            if (e.target.closest('#fab-add-category') || e.target.closest('#fab-add-category-inline')) {
+            if (e.target.closest('#fab-add-category') || e.target.closest('#fab-add-category-inline') || e.target.closest('#fab-add-category-btn')) {
                 this.budgetUI.openCategoryModal();
+                // Close FAB menu if open
+                const fabMenu = document.getElementById('fab-budget-menu');
+                if (fabMenu) fabMenu.classList.add('hidden');
             }
             
             const categoryCard = e.target.closest('.category-card[data-id]');
@@ -169,9 +182,20 @@ export class UIManager {
                 });
             }
             
-            // Mappings
-            if (e.target.closest('#add-mapping-btn')) {
-                this.mappingsUI.showAddMappingModal();
+            // Mappings FAB
+            if (e.target.closest('#fab-add-mapping')) {
+                this.mappingsUI.toggleMappingFabMenu();
+            }
+            
+            if (e.target.closest('#fab-mapping-manual')) {
+                document.getElementById('fab-mapping-menu')?.classList.add('hidden');
+                this.mappingsUI.showManualMappingModal();
+            }
+            
+            if (e.target.closest('#fab-mapping-import')) {
+                document.getElementById('fab-mapping-menu')?.classList.add('hidden');
+                const input = document.getElementById('import-mappings-input');
+                if (input) input.click();
             }
             
             // Filters
@@ -361,13 +385,22 @@ export class UIManager {
             targetTab.classList.add('active');
         }
         
-        // Show/hide FAB
+        // Show/hide FABs
         const transactionFab = document.getElementById('fab-add-transaction');
         if (transactionFab) {
             if (tabName === 'transactions') {
                 transactionFab.classList.remove('hidden');
             } else {
                 transactionFab.classList.add('hidden');
+            }
+        }
+        
+        const mappingFab = document.getElementById('fab-add-mapping');
+        if (mappingFab) {
+            if (tabName === 'mappings') {
+                mappingFab.classList.remove('hidden');
+            } else {
+                mappingFab.classList.add('hidden');
             }
         }
         
@@ -378,16 +411,6 @@ export class UIManager {
                 summarySection.classList.remove('hidden');
             } else {
                 summarySection.classList.add('hidden');
-            }
-        }
-        
-        // Show/hide add bar
-        const addBar = document.querySelector('.add-bar');
-        if (addBar) {
-            if (tabName === 'transactions' || tabName === 'mappings') {
-                addBar.style.display = 'flex';
-            } else {
-                addBar.style.display = 'none';
             }
         }
         

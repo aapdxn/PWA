@@ -3,6 +3,11 @@ export class SummaryUI {
     constructor(security, db) {
         this.security = security;
         this.db = db;
+        
+        // Filter state
+        const now = new Date();
+        this.selectedYear = now.getFullYear();
+        this.selectedPeriod = 'current-month'; // 'ytd', 'current-month', or 'YYYY-MM'
     }
 
     async renderSummaryTab() {
@@ -35,11 +40,29 @@ export class SummaryUI {
             return;
         }
         
+        // Generate year and period options
+        const years = this.getAvailableYears(transactions);
+        const periods = this.getPeriodOptions(this.selectedYear);
+        
+        // Build filter controls
+        const filterHTML = `
+            <div style="position: sticky; top: 0; z-index: 10; background: var(--bg-secondary); padding: 12px 16px; border-bottom: 1px solid var(--border-color);">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <select id="summary-year" style="flex: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.875rem;">
+                        ${years.map(y => `<option value="${y}" ${y === this.selectedYear ? 'selected' : ''}>${y}</option>`).join('')}
+                    </select>
+                    <select id="summary-period" style="flex: 2; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.875rem;">
+                        ${periods.map(p => `<option value="${p.value}" ${p.value === this.selectedPeriod ? 'selected' : ''}>${p.label}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+        `;
+        
         // Calculate totals and category breakdowns
         const summary = await this.calculateSummaryData(transactions, categories);
         
         // Build HTML with donut charts and tables
-        let html = '<div class="summary-sections">';
+        let html = filterHTML + '<div class="summary-sections">';
         
         // Render each category type section
         for (const type of ['Income', 'Expense', 'Saving']) {
@@ -51,6 +74,26 @@ export class SummaryUI {
         html += '</div>';
         
         container.innerHTML = html;
+        
+        // Attach filter event listeners
+        const yearSelect = document.getElementById('summary-year');
+        const periodSelect = document.getElementById('summary-period');
+        
+        if (yearSelect) {
+            yearSelect.addEventListener('change', (e) => {
+                this.selectedYear = parseInt(e.target.value);
+                // Reset period options when year changes
+                this.selectedPeriod = 'current-month';
+                this.renderSummaryTab();
+            });
+        }
+        
+        if (periodSelect) {
+            periodSelect.addEventListener('change', (e) => {
+                this.selectedPeriod = e.target.value;
+                this.renderSummaryTab();
+            });
+        }
         
         // Render donut charts after DOM update
         setTimeout(() => {
@@ -76,7 +119,10 @@ export class SummaryUI {
         const categoryTotals = {};
         const categoryBudgets = {};
         
-        for (const transaction of transactions) {
+        // Filter transactions by selected period
+        const filteredTransactions = await this.filterTransactionsByPeriod(transactions);
+        
+        for (const transaction of filteredTransactions) {
             const amount = Math.abs(parseFloat(await this.security.decrypt(transaction.encrypted_amount)));
             const category = categories.find(c => c.id === transaction.categoryId);
             
@@ -306,5 +352,83 @@ export class SummaryUI {
             Saving: ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe']
         };
         return colors[type] || colors.Expense;
+    }
+    
+    getAvailableYears(transactions) {
+        const years = new Set();
+        const now = new Date();
+        years.add(now.getFullYear());
+        
+        // Add years from transactions (but don't decrypt yet, we'll filter later)
+        // For now, just provide current year and a few years back
+        for (let i = 0; i < 5; i++) {
+            years.add(now.getFullYear() - i);
+        }
+        
+        return Array.from(years).sort((a, b) => b - a);
+    }
+    
+    getPeriodOptions(year) {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        
+        const options = [
+            { value: 'ytd', label: 'Total Year' },
+            { value: 'current-month', label: 'Current Month' }
+        ];
+        
+        // Add all months of the selected year
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        for (let i = 0; i < 12; i++) {
+            // Only show months up to current month if it's the current year
+            if (year === currentYear && i > currentMonth) continue;
+            
+            const monthValue = `${year}-${String(i + 1).padStart(2, '0')}`;
+            options.push({ value: monthValue, label: monthNames[i] });
+        }
+        
+        return options;
+    }
+    
+    async filterTransactionsByPeriod(transactions) {
+        const filtered = [];
+        
+        for (const transaction of transactions) {
+            const dateStr = await this.security.decrypt(transaction.encrypted_date);
+            const transactionDate = new Date(dateStr);
+            const transactionYear = transactionDate.getFullYear();
+            const transactionMonth = String(transactionDate.getMonth() + 1).padStart(2, '0');
+            const transactionYearMonth = `${transactionYear}-${transactionMonth}`;
+            
+            let include = false;
+            
+            if (this.selectedPeriod === 'ytd') {
+                // Total year: Jan 1 to Dec 31 (or today if current year)
+                const yearStart = new Date(this.selectedYear, 0, 1);
+                const yearEnd = new Date(this.selectedYear, 11, 31, 23, 59, 59);
+                const now = new Date();
+                const effectiveEnd = this.selectedYear === now.getFullYear() ? now : yearEnd;
+                
+                include = transactionDate >= yearStart && transactionDate <= effectiveEnd;
+            } else if (this.selectedPeriod === 'current-month') {
+                // Current month number in selected year
+                const now = new Date();
+                const currentMonthNum = String(now.getMonth() + 1).padStart(2, '0');
+                const targetMonth = `${this.selectedYear}-${currentMonthNum}`;
+                include = transactionYearMonth === targetMonth;
+            } else {
+                // Specific month (YYYY-MM format)
+                include = transactionYearMonth === this.selectedPeriod;
+            }
+            
+            if (include) {
+                filtered.push(transaction);
+            }
+        }
+        
+        return filtered;
     }
 }

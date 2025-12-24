@@ -101,6 +101,10 @@ export class DatabaseManager {
         });
     }
 
+    async deleteMappingDescription(description) {
+        await this.db.mappings_descriptions.delete(description);
+    }
+
     async getCategoryBudget(categoryId, month) {
         return await this.db.category_budgets.get([categoryId, month]);
     }
@@ -114,7 +118,10 @@ export class DatabaseManager {
     }
 
     async getCategoryBudgetsForMonth(month) {
-        return await this.db.category_budgets.where('month').equals(month).toArray();
+        // Can't query by month alone since it's a compound key [categoryId+month]
+        // Get all and filter in memory
+        const allBudgets = await this.db.category_budgets.toArray();
+        return allBudgets.filter(b => b.month === month);
     }
 
     async bulkAddTransactions(transactions) {

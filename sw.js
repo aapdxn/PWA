@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2.24.0'; // Major refactor: modular architecture (/js/core, /js/ui), extracted mappings, settings, modal-manager
+const CACHE_VERSION = 'v2.26.2'; // Fixed: Category edit modal now shows/saves monthly budget amounts correctly
 const CACHE_NAME = `vault-budget-${CACHE_VERSION}`;
 
 // Cache only local files that exist

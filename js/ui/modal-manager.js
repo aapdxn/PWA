@@ -12,14 +12,17 @@ export class ModalManager {
     async showCategoryResolutionModal(unmappedCategories) {
         const allCategories = await this.db.getAllCategories();
         
+        console.log('🔍 Category Resolution Modal - unmapped categories:', unmappedCategories);
+        console.log('📋 Existing categories count:', allCategories.length);
+        
         return new Promise(async (resolve) => {
             const modalHTML = `
                 <div class="modal-overlay" id="category-resolution-modal">
-                    <div class="modal-content" style="max-width: 600px; max-height: 80vh;">
+                    <div class="modal-content" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
                         <div class="modal-header">
                             <h2>Categories Not Found</h2>
                         </div>
-                        <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                        <div class="modal-body" style="flex: 1; overflow-y: auto; max-height: calc(80vh - 140px);">
                             <p style="margin-bottom: 1rem; color: var(--text-secondary);">The following categories were not found in your budget. Choose how to handle each one:</p>
                             <div id="unmapped-categories-list"></div>
                         </div>
@@ -36,6 +39,11 @@ export class ModalManager {
             const listContainer = document.getElementById('unmapped-categories-list');
             
             // Build list of unmapped categories
+            if (!unmappedCategories || unmappedCategories.length === 0) {
+                console.error('❌ No unmapped categories provided to modal!');
+                listContainer.innerHTML = '<p style="color: var(--danger-color);">Error: No categories to display</p>';
+            }
+            
             unmappedCategories.forEach((categoryName, index) => {
                 const itemHTML = `
                     <div class="unmapped-category-item" style="padding: 1rem; margin-bottom: 0.75rem; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px;" data-category="${categoryName}">
@@ -46,9 +54,11 @@ export class ModalManager {
                                 <input type="radio" name="resolution-${index}" value="existing" checked class="resolution-radio" style="cursor: pointer;">
                                 <span style="color: var(--text-primary);">Map to existing category</span>
                             </label>
-                            <select class="existing-category-select" data-index="${index}" style="width: 100%; padding: 0.5rem; margin: 0.5rem 0 0 1.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 14px;">
-                                <option value="" style="background: var(--bg-secondary); color: var(--text-primary);">Select a category...</option>
-                            </select>
+                            <div style="padding-left: 1.75rem; margin-top: 0.5rem;">
+                                <select class="existing-category-select" data-index="${index}" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 14px; max-width: 100%; box-sizing: border-box;">
+                                    <option value="" style="background: var(--bg-secondary); color: var(--text-primary);">Select a category...</option>
+                                </select>
+                            </div>
                         </div>
                         
                         <div>
@@ -56,12 +66,14 @@ export class ModalManager {
                                 <input type="radio" name="resolution-${index}" value="new" class="resolution-radio" style="cursor: pointer;">
                                 <span style="color: var(--text-primary);">Create new category "${categoryName}"</span>
                             </label>
-                            <select class="new-category-type" data-index="${index}" disabled style="width: 100%; padding: 0.5rem; margin: 0.5rem 0 0 1.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 14px;">
-                                <option value="" style="background: var(--bg-secondary); color: var(--text-primary);">Select type...</option>
-                                <option value="Expense" style="background: var(--bg-secondary); color: var(--text-primary);">Expense</option>
-                                <option value="Income" style="background: var(--bg-secondary); color: var(--text-primary);">Income</option>
-                                <option value="Saving" style="background: var(--bg-secondary); color: var(--text-primary);">Saving</option>
-                            </select>
+                            <div style="padding-left: 1.75rem; margin-top: 0.5rem;">
+                                <select class="new-category-type" data-index="${index}" disabled style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 14px; max-width: 100%; box-sizing: border-box;">
+                                    <option value="">Select type...</option>
+                                    <option value="Expense" selected style="background: var(--bg-secondary); color: var(--text-primary);">Expense</option>
+                                    <option value="Income" style="background: var(--bg-secondary); color: var(--text-primary);">Income</option>
+                                    <option value="Saving" style="background: var(--bg-secondary); color: var(--text-primary);">Saving</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 `;

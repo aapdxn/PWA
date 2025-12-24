@@ -49,8 +49,26 @@ export class CSVEngine {
             
             // Try to find category from mappings
             const descMapping = await this.mapper.getDescriptionMapping(mapped.description);
-            const suggestedCategoryId = descMapping ? 
-                parseInt(await this.security.decrypt(descMapping.encrypted_category)) : null;
+            let suggestedCategoryId = null;
+            
+            if (descMapping && descMapping.encrypted_category) {
+                try {
+                    // Decrypt the category name
+                    const categoryName = await this.security.decrypt(descMapping.encrypted_category);
+                    
+                    // Find the category by name
+                    const allCategories = await this.db.getAllCategories();
+                    for (const cat of allCategories) {
+                        const name = await this.security.decrypt(cat.encrypted_name);
+                        if (name === categoryName) {
+                            suggestedCategoryId = cat.id;
+                            break;
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Failed to decrypt category mapping:', error);
+                }
+            }
             
             // Get account name from mapping
             const acctMapping = await this.mapper.getAccountMapping(mapped.accountNumber);
@@ -99,9 +117,11 @@ export class CSVEngine {
             
             // Save mapping if requested
             if (item.saveMapping && item.categoryId) {
+                const category = await this.db.getCategory(item.categoryId);
+                const categoryName = await this.security.decrypt(category.encrypted_name);
                 await this.db.setMappingDescription(
                     item.description,
-                    await this.security.encrypt(item.categoryId.toString()),
+                    await this.security.encrypt(categoryName),
                     await this.security.encrypt('')
                 );
             }
@@ -162,6 +182,8 @@ export class CSVEngine {
                 const categoryId = categoryByName[normalizedCategoryName] || null;
                 const isDuplicate = existingDescriptions.has(description.toLowerCase());
                 
+                console.log(`📋 Mapping: "${description}" → "${categoryName}" (ID: ${categoryId}, Duplicate: ${isDuplicate})`);
+                
                 processedMappings.push({
                     description,
                     payee: '',
@@ -186,9 +208,12 @@ export class CSVEngine {
             if (item.skip || item.isDuplicate) continue;
             if (!item.categoryId) continue;
             
+            const category = await this.db.getCategory(item.categoryId);
+            const categoryName = await this.security.decrypt(category.encrypted_name);
+            
             await this.db.setMappingDescription(
                 item.description,
-                await this.security.encrypt(item.categoryId.toString()),
+                await this.security.encrypt(categoryName),
                 await this.security.encrypt('')
             );
             

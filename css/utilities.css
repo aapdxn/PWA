@@ -1,0 +1,47 @@
+/* === RESPONSIVE ADJUSTMENTS === */
+.dashboard-content {
+    overflow-y: auto;
+}
+
+@media (max-width: 480px) {
+    .summary-section-fixed {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* === HOVER & ACTIVE STATES === */
+.transaction-item:hover {
+    background: var(--bg-tertiary);
+    transform: translateX(4px);
+}
+
+.transaction-item:active {
+    transform: scale(0.98);
+}
+
+.category-card:hover {
+    background: var(--bg-tertiary);
+    transform: translateX(4px);
+}
+
+.category-card:active {
+    transform: scale(0.98);
+}
+
+/* === SCROLLBAR STYLING (Optional - Webkit only) === */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--border-color);
+}

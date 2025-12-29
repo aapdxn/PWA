@@ -1,16 +1,37 @@
-const CACHE_VERSION = 'v2.2.1'; // Increment version
+const CACHE_VERSION = 'v2.38.3'; // Simplified unmapped accounts notification to show count only
 const CACHE_NAME = `vault-budget-${CACHE_VERSION}`;
 
 // Cache only local files that exist
 const urlsToCache = [
-    './',
-    './index.html',
-    './css/styles.css',
-    './app.js',
-    './js/security-manager.js',
-    './js/database.js',
-    './js/csv-importer.js',
-    './manifest.json'
+    '/',
+    '/index.html',
+    '/main.js',
+    '/js/core/security.js',
+    '/js/core/database.js',
+    '/js/core/csv-engine.js',
+    '/js/core/csv-validator.js',
+    '/js/core/csv-mapper.js',
+    '/js/ui/ui-manager.js',
+    '/js/ui/auth-ui.js',
+    '/js/ui/home-ui.js',
+    '/js/ui/transaction-ui.js',
+    '/js/ui/budget-ui.js',
+    '/js/ui/summary-ui.js',
+    '/js/ui/mappings-ui.js',
+    '/js/ui/settings-ui.js',
+    '/js/ui/modal-manager.js',
+    '/js/ui/csv-review-ui.js',
+    '/js/ui/account-mappings-ui.js',
+    '/js/ui/custom-select.js',
+    '/css/base.css',
+    '/css/components.css',
+    '/css/layout.css',
+    '/css/pages.css',
+    '/css/utilities.css',
+    '/manifest.json',
+    'https://unpkg.com/dexie@3.2.4/dist/dexie.min.js',
+    'https://unpkg.com/lucide@latest',
+    'https://unpkg.com/papaparse@5.4.1/papaparse.min.js'
 ];
 
 // Install event

@@ -1,4 +1,6 @@
-class SecurityManager {
+// SecurityManager - Handles all encryption and password operations
+// Uses Web Crypto API for zero-knowledge encryption
+export class SecurityManager {
     constructor() {
         this.encryptionKey = null;
         this.iterations = 100000;
@@ -148,7 +150,7 @@ class SecurityManager {
         return bytes;
     }
 
-    clearKey() {
+    clearEncryptionKey() {
         this.encryptionKey = null;
     }
 }

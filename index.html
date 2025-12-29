@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,12 +12,20 @@
     <title>Vault Budget</title>
     
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="css/styles.css">
+    <!-- Modular CSS -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/pages.css">
+    <link rel="stylesheet" href="css/utilities.css">
     
-    <!-- External Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <!-- External Libraries (CDN) -->
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/dexie@latest/dist/dexie.min.js"></script>
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+    <!-- Main Application (ES Module) -->
+    <script type="module" src="main.js"></script>
 </head>
 <body>
     <div id="app">
@@ -83,115 +91,288 @@
         <!-- STATE 3: UNLOCKED / DASHBOARD -->
         <div id="dashboard-screen" class="screen hidden">
             
-            <!-- Top Add Bar (60% width, centered) -->
-            <div class="add-bar">
-                <div class="add-bar-content">
-                    <button class="btn-add" id="add-transaction-btn">
-                        <i data-lucide="plus"></i>
-                        Add Transaction
-                    </button>
-                    <button class="btn-add" id="import-csv-btn">
-                        <i data-lucide="upload"></i>
-                        Import CSV
-                    </button>
+            <!-- Summary Cards (Fixed at top, only visible on Budget tab) -->
+            <div class="summary-section-fixed">
+                <div class="summary-card income">
+                    <div class="summary-label">Income</div>
+                    <div class="summary-value">$0.00</div>
+                </div>
+                <div class="summary-card spent">
+                    <div class="summary-label">Outflow</div>
+                    <div class="summary-value">$0.00</div>
+                </div>
+                <div class="summary-card remaining">
+                    <div class="summary-label">Remaining</div>
+                    <div class="summary-value">$0.00</div>
                 </div>
             </div>
             
-            <!-- Main Content -->
-            <main class="dashboard-content">
-                
-                <!-- Summary Cards -->
-                <div class="summary-section">
-                    <div class="summary-card">
-                        <div class="summary-label">Total Budget</div>
-                        <div class="summary-value" id="total-budget">$0.00</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-label">Spent</div>
-                        <div class="summary-value" id="total-spent">$0.00</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-label">Remaining</div>
-                        <div class="summary-value" id="total-remaining">$0.00</div>
-                    </div>
+            <!-- Tab Content -->
+            <main>
+                <div id="tab-home" class="tab-content active">
+                    <div id="home-content"></div>
                 </div>
                 
-                <!-- Tab Content: Transactions -->
-                <div id="tab-transactions" class="tab-content active">
-                    <div class="section-header">
-                        <h2>Transactions</h2>
+                <div id="tab-transactions" class="tab-content">
+                    <!-- Search Bar -->
+                    <div class="search-bar">
+                        <div class="search-input-wrapper">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="transaction-search" placeholder="Search descriptions..." />
+                        </div>
+                        <button class="search-menu-btn" id="advanced-search-toggle">
+                            <i data-lucide="menu"></i>
+                        </button>
                     </div>
-                    <div id="transactions-list" class="list-container">
-                        <!-- Populated by JavaScript -->
+                    
+                    <!-- Advanced Search Panel -->
+                    <div class="advanced-search-panel hidden" id="advanced-search-panel">
+                        <div class="advanced-scroll-container">
+                            <div class="advanced-section">
+                                <h4 class="section-toggle">
+                                    <span>Search In</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content">
+                                    <div class="checkbox-group">
+                                        <label><input type="checkbox" id="search-description" checked> Description</label>
+                                        <label><input type="checkbox" id="search-account"> Account</label>
+                                        <label><input type="checkbox" id="search-category"> Category</label>
+                                        <label><input type="checkbox" id="search-note"> Note</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle">
+                                    <span>Quick Filters</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content">
+                                    <div class="checkbox-group">
+                                        <label><input type="checkbox" id="filter-unlinked-transfers"> Unlinked Transfers Only</label>
+                                        <label><input type="checkbox" id="filter-uncategorized"> Uncategorized Only</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle">
+                                    <span>Sort By</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content">
+                                    <select id="sort-field">
+                                        <option value="date">Date</option>
+                                        <option value="amount">Amount</option>
+                                        <option value="description">Description</option>
+                                        <option value="category">Category</option>
+                                        <option value="account">Account</option>
+                                    </select>
+                                    <select id="sort-order">
+                                        <option value="desc">Descending</option>
+                                        <option value="asc">Ascending</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Category</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="filter-select-wrapper">
+                                            <input type="text" id="filter-category-search" placeholder="Search categories..." />
+                                            <select id="filter-category" multiple size="4"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Account</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="filter-select-wrapper">
+                                            <input type="text" id="filter-account-search" placeholder="Search accounts..." />
+                                            <select id="filter-account" multiple size="4"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Description</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="filter-select-wrapper">
+                                            <input type="text" id="filter-description-search" placeholder="Search descriptions..." />
+                                            <select id="filter-description" multiple size="4"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Amount</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="range-inputs">
+                                            <input type="number" id="filter-amount-min" placeholder="Min" step="0.01" />
+                                            <span>to</span>
+                                            <input type="number" id="filter-amount-max" placeholder="Max" step="0.01" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
+                                    <span>Filter by Date</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="range-inputs">
+                                            <input type="date" id="filter-date-start" />
+                                            <span>to</span>
+                                            <input type="date" id="filter-date-end" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="advanced-actions">
+                            <button class="btn-secondary" id="clear-filters">Clear All</button>
+                            <button class="btn-primary" id="apply-filters">Apply</button>
+                        </div>
                     </div>
+                    
+                    <div id="transactions-list"></div>
                 </div>
                 
-                <!-- Tab Content: Budget (formerly Categories) -->
                 <div id="tab-budget" class="tab-content">
-                    <div id="month-picker" class="month-picker">
-                        <button class="btn-month-nav" id="prev-month">
-                            <i data-lucide="chevron-left"></i>
-                        </button>
-                        <span class="month-display" id="current-month">January 2025</span>
-                        <button class="btn-month-nav" id="next-month">
-                            <i data-lucide="chevron-right"></i>
-                        </button>
-                        <button class="btn-today" id="return-today">Today</button>
-                    </div>
-                    <div id="budget-list" class="budget-container">
-                        <!-- Populated by JavaScript -->
-                    </div>
+                    <div id="budget-list"></div>
                 </div>
                 
-                <!-- Tab Content: Mappings -->
-                <div id="tab-mappings" class="tab-content">
-                    <h2>Manage Mappings</h2>
-                    <div id="mappings-list" class="mappings-container">
-                        <!-- Populated by JavaScript -->
-                    </div>
+                <div id="tab-summary" class="tab-content">
+                    <div id="summary-container"></div>
                 </div>
                 
-                <!-- Tab Content: Settings -->
+                <div id="tab-mappings" class="tab-content hidden">
+                    <div class="page-header">
+                        <button id="category-mappings-back" class="btn-icon">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <h2>Category Mappings</h2>
+                    </div>
+                    <div id="mappings-list"></div>
+                </div>
+                
                 <div id="tab-settings" class="tab-content">
-                    <h2>Settings</h2>
-                    <div class="settings-section">
-                        <button id="export-btn" class="btn-secondary full-width">
-                            <i data-lucide="download"></i>
-                            <span>Export Data (CSV)</span>
-                        </button>
-                        <button id="change-password-btn" class="btn-secondary full-width">
-                            <i data-lucide="key"></i>
-                            <span>Change Master Password</span>
-                        </button>
-                        <button id="reset-btn" class="btn-danger full-width">
-                            <i data-lucide="trash-2"></i>
-                            <span>Reset All Data</span>
-                        </button>
-                    </div>
+                    <div id="settings-content"></div>
                 </div>
                 
+                <!-- Account Mappings Page (accessed from Settings) -->
+                <div id="account-mappings-page" class="tab-content hidden">
+                    <div class="page-header">
+                        <button id="account-mappings-back" class="btn-icon">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <h2>Account Mappings</h2>
+                    </div>
+                    <div id="account-mappings-content"></div>
+                </div>
+                
+                <!-- CSV Import Page (Not in bottom nav, accessed via FAB) -->
+                <div id="csv-import-page" class="tab-content hidden">
+                    <div class="page-header">
+                        <button id="csv-import-back" class="btn-icon">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <h2>Import CSV</h2>
+                    </div>
+                    <div id="csv-import-content"></div>
+                </div>
             </main>
+            
+            <!-- FAB for Transactions (hidden on other tabs) -->
+            <button class="fab hidden" id="fab-add-transaction">
+                <i data-lucide="plus"></i>
+            </button>
+            
+            <!-- FAB for Mappings (hidden on other tabs) -->
+            <button class="fab hidden" id="fab-add-mapping">
+                <i data-lucide="plus"></i>
+            </button>
+            
+            <!-- FAB Popup Menu -->
+            <div class="fab-menu hidden" id="fab-transaction-menu">
+                <button class="fab-menu-item" id="fab-manual-entry">
+                    <i data-lucide="edit-3"></i>
+                    <span>Manual Entry</span>
+                </button>
+                <button class="fab-menu-item" id="fab-import-csv">
+                    <i data-lucide="upload"></i>
+                    <span>Import CSV</span>
+                </button>
+                <button class="fab-menu-item" id="fab-undo" disabled>
+                    <i data-lucide="undo"></i>
+                    <span>Undo Last Add</span>
+                </button>
+                <button class="fab-menu-item" id="fab-redo" disabled>
+                    <i data-lucide="redo"></i>
+                    <span>Redo Last Add</span>
+                </button>
+            </div>
+            
+            <!-- FAB Menu for Mappings -->
+            <div class="fab-menu hidden" id="fab-mapping-menu">
+                <button class="fab-menu-item" id="fab-mapping-manual">
+                    <i data-lucide="edit-3"></i>
+                    <span>Manual Entry</span>
+                </button>
+                <button class="fab-menu-item" id="fab-mapping-import">
+                    <i data-lucide="upload"></i>
+                    <span>Import CSV</span>
+                </button>
+            </div>
             
             <!-- Bottom Navigation -->
             <nav class="bottom-nav">
-                <button class="nav-item active" data-tab="transactions">
-                    <i data-lucide="receipt"></i>
+                <button class="nav-item active" data-tab="home">
+                    <i data-lucide="home"></i>
+                    <span>Home</span>
+                </button>
+                <button class="nav-item" data-tab="transactions">
+                    <i data-lucide="list"></i>
                     <span>Transactions</span>
                 </button>
                 <button class="nav-item" data-tab="budget">
                     <i data-lucide="wallet"></i>
                     <span>Budget</span>
                 </button>
-                <button class="nav-item" data-tab="mappings">
-                    <i data-lucide="link"></i>
-                    <span>Mappings</span>
+                <button class="nav-item" data-tab="summary">
+                    <i data-lucide="bar-chart-2"></i>
+                    <span>Summary</span>
                 </button>
                 <button class="nav-item" data-tab="settings">
                     <i data-lucide="settings"></i>
                     <span>Settings</span>
                 </button>
             </nav>
-            
         </div>
         
     </div>
@@ -207,29 +388,39 @@
             </div>
             <form id="transaction-form">
                 <div class="input-group">
-                    <label for="transaction-date">Date</label>
-                    <input type="date" id="transaction-date" required>
+                    <label for="transaction-date">Date *</label>
+                    <input type="date" id="transaction-date" required autocomplete="off">
                 </div>
                 <div class="input-group">
-                    <label for="transaction-amount">Amount</label>
-                    <input type="number" id="transaction-amount" step="0.01" placeholder="0.00" required>
+                    <label for="transaction-amount">Amount *</label>
+                    <input type="number" id="transaction-amount" step="0.01" required 
+                           autocomplete="off" placeholder="0.00">
                 </div>
                 <div class="input-group">
-                    <label for="transaction-category">Category</label>
+                    <label for="transaction-category">Category *</label>
                     <select id="transaction-category" required>
                         <option value="">Select category...</option>
                     </select>
                 </div>
-                <div class="input-group">
-                    <label for="transaction-note">Note (optional)</label>
-                    <textarea id="transaction-note" rows="2" placeholder="Add a note..."></textarea>
+                <div class="input-group" id="transaction-link-group" style="display: none;">
+                    <label for="transaction-link">Link to Transfer *</label>
+                    <select id="transaction-link">
+                        <option value="">Select transaction to link...</option>
+                    </select>
                 </div>
-                <div id="custom-fields-container">
-                    <!-- Dynamic custom fields populated here -->
+                <div class="input-group">
+                    <label for="transaction-description">Description</label>
+                    <input type="text" id="transaction-description" autocomplete="off" 
+                           placeholder="e.g., Grocery shopping">
+                </div>
+                <div class="input-group">
+                    <label for="transaction-account">Account</label>
+                    <input type="text" id="transaction-account" autocomplete="off" 
+                           placeholder="e.g., Checking">
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn-secondary close-modal" data-modal="transaction-modal">Cancel</button>
-                    <button type="submit" class="btn-primary">Save</button>
+                    <button type="submit" class="btn-primary" id="transaction-form-submit">Save</button>
                 </div>
             </form>
         </div>
@@ -246,16 +437,24 @@
             </div>
             <form id="category-form">
                 <div class="input-group">
-                    <label for="category-name">Category Name</label>
-                    <input type="text" id="category-name" placeholder="e.g., Groceries" required>
+                    <label for="category-name">Category Name *</label>
+                    <input type="text" id="category-name" required autocomplete="off" placeholder="e.g., Groceries">
                 </div>
                 <div class="input-group">
-                    <label for="category-limit">Monthly Limit</label>
-                    <input type="number" id="category-limit" step="0.01" placeholder="0.00" required>
+                    <label for="category-limit">Budget Amount *</label>
+                    <input type="number" id="category-limit" step="0.01" required autocomplete="off" placeholder="0.00">
+                </div>
+                <div class="input-group">
+                    <label for="category-type">Type *</label>
+                    <select id="category-type" required>
+                        <option value="Income">Income</option>
+                        <option value="Expense" selected>Expense</option>
+                        <option value="Saving">Saving</option>
+                    </select>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn-secondary close-modal" data-modal="category-modal">Cancel</button>
-                    <button type="submit" class="btn-primary">Save</button>
+                    <button type="submit" class="btn-primary" id="category-form-submit">Save</button>
                 </div>
             </form>
         </div>
@@ -276,18 +475,44 @@
         </div>
     </div>
     
-    <!-- Scripts -->
-    <script src="js/security-manager.js"></script>
-    <script src="js/database.js"></script>
-    <script src="js/csv-importer.js"></script>
-    <script src="app.js"></script>
+    <!-- Modal: Category Migration -->
+    <div id="migration-modal" class="modal hidden">
+        <div class="modal-content">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+    
+    <!-- Modal: Month Scope Selection -->
+    <div id="month-scope-modal" class="modal hidden">
+        <div class="modal-content">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+    
+    <!-- Modal: Account Mapping Edit -->
+    <div id="account-mapping-modal" class="modal hidden">
+        <!-- Populated by JavaScript -->
+    </div>
+    
+    <!-- Lucide Icons Initialization -->
     <script>
-        // Initialize Lucide icons
+        // Initialize Lucide icons after DOM loads
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, checking dependencies...');
+            
+            // Check for dependencies
+            if (typeof Dexie === 'undefined') {
+                console.error('❌ Dexie.js failed to load');
+            }
+            if (typeof Papa === 'undefined') {
+                console.error('❌ PapaParse failed to load');
+            }
+            if (typeof lucide === 'undefined') {
+                console.error('❌ Lucide failed to load');
+            }
+            
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
-            } else {
-                console.error('❌ Lucide failed to load');
             }
         });
         
@@ -303,21 +528,6 @@
                     });
             });
         }
-        
-        // Verify critical dependencies loaded
-        window.addEventListener('load', () => {
-            const missing = [];
-            if (typeof Dexie === 'undefined') missing.push('Dexie.js');
-            if (typeof Papa === 'undefined') missing.push('PapaParse');
-            if (typeof lucide === 'undefined') missing.push('Lucide');
-            
-            if (missing.length > 0) {
-                console.error('⚠️ Failed to load:', missing.join(', '));
-                console.info('💡 Disable tracking prevention in browser settings');
-            } else {
-                console.log('✅ All dependencies loaded');
-            }
-        });
     </script>
 </body>
 </html>

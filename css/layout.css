@@ -1,4 +1,11 @@
 /* === DASHBOARD LAYOUT === */
+#dashboard-screen {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
 .top-bar {
     display: flex;
     justify-content: space-between;
@@ -59,11 +66,13 @@
 
 .tab-content {
     display: none;
-    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    height: calc(100vh - 80px - env(safe-area-inset-bottom));
+    overflow: hidden;
 }
 
 .tab-content.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
 }
 
 /* === BOTTOM NAVIGATION === */

@@ -1,5 +1,6 @@
 // UIManager - Main UI Coordinator (Delegate-Only Pattern)
 import { AuthUI } from './auth-ui.js';
+import { HomeUI } from './home-ui.js';
 import { TransactionUI } from './transaction-ui.js';
 import { BudgetUI } from './budget-ui.js';
 import { SummaryUI } from './summary-ui.js';
@@ -7,21 +8,24 @@ import { MappingsUI } from './mappings-ui.js';
 import { SettingsUI } from './settings-ui.js';
 import { ModalManager } from './modal-manager.js';
 import { CSVReviewUI } from './csv-review-ui.js';
+import { AccountMappingsUI } from './account-mappings-ui.js';
 
 export class UIManager {
     constructor(security, db, csvEngine) {
         this.security = security;
         this.db = db;
         this.csvEngine = csvEngine;
-        this.currentTab = 'transactions';
+        this.currentTab = 'home';
         
         // Initialize UI modules
         this.authUI = new AuthUI(security, db);
-        this.transactionUI = new TransactionUI(security, db);
+        this.homeUI = new HomeUI(security, db);
+        this.modalManager = new ModalManager(security, db);
+        this.accountMappingsUI = new AccountMappingsUI(security, db, this.modalManager);
+        this.transactionUI = new TransactionUI(security, db, this.accountMappingsUI);
         this.budgetUI = new BudgetUI(security, db);
         this.summaryUI = new SummaryUI(security, db);
-        this.modalManager = new ModalManager(security, db);
-        this.csvReviewUI = new CSVReviewUI(security, db);
+        this.csvReviewUI = new CSVReviewUI(security, db, this.accountMappingsUI);
         this.mappingsUI = new MappingsUI(security, db, csvEngine, this.modalManager);
         this.settingsUI = new SettingsUI(security, db);
         
@@ -42,6 +46,45 @@ export class UIManager {
 
     attachEventListeners() {
         console.log('🔗 Attaching event listeners...');
+        
+        // Listen for account mappings navigation event
+        window.addEventListener('show-account-mappings', async () => {
+            await this.accountMappingsUI.renderAccountMappingsPage();
+        });
+        
+        // Listen for category mappings navigation event
+        window.addEventListener('show-category-mappings', async () => {
+            await this.mappingsUI.renderMappingsTab();
+        });
+        
+        // Account mappings back button
+        document.addEventListener('click', async (e) => {
+            if (e.target.id === 'account-mappings-back' || e.target.closest('#account-mappings-back')) {
+                e.preventDefault();
+                const accountMappingsPage = document.getElementById('account-mappings-page');
+                if (accountMappingsPage) {
+                    accountMappingsPage.classList.add('hidden');
+                    accountMappingsPage.classList.remove('active');
+                }
+                document.querySelector('.bottom-nav')?.classList.remove('hidden');
+                await this.showTab('settings');
+                return;
+            }
+            
+            // Category mappings back button
+            if (e.target.id === 'category-mappings-back' || e.target.closest('#category-mappings-back')) {
+                e.preventDefault();
+                const categoryMappingsPage = document.getElementById('tab-mappings');
+                if (categoryMappingsPage) {
+                    categoryMappingsPage.classList.add('hidden');
+                    categoryMappingsPage.classList.remove('active');
+                }
+                document.querySelector('.bottom-nav')?.classList.remove('hidden');
+                document.querySelectorAll('.fab').forEach(fab => fab.classList.add('hidden'));
+                await this.showTab('settings');
+                return;
+            }
+        });
         
         document.addEventListener('click', async (e) => {
             // Auth
@@ -205,11 +248,34 @@ export class UIManager {
             // Filters
             if (e.target.closest('#advanced-search-toggle')) {
                 const panel = document.getElementById('advanced-search-panel');
+                const transactionsScrollContainer = document.querySelector('.transactions-scroll-container');
                 if (panel) {
                     panel.classList.toggle('hidden');
                     if (!panel.classList.contains('hidden')) {
                         await this.transactionUI.populateFilterOptions();
                         if (typeof lucide !== 'undefined') lucide.createIcons();
+                        // Disable scrolling on main transactions list when filter is open
+                        if (transactionsScrollContainer) {
+                            transactionsScrollContainer.classList.add('scroll-disabled');
+                        }
+                    } else {
+                        // Re-enable scrolling when filter is closed
+                        if (transactionsScrollContainer) {
+                            transactionsScrollContainer.classList.remove('scroll-disabled');
+                        }
+                    }
+                }
+            }
+            
+            // Apply filters button - close filter panel
+            if (e.target.closest('#apply-filters')) {
+                const panel = document.getElementById('advanced-search-panel');
+                const transactionsScrollContainer = document.querySelector('.transactions-scroll-container');
+                if (panel) {
+                    panel.classList.add('hidden');
+                    // Re-enable scrolling
+                    if (transactionsScrollContainer) {
+                        transactionsScrollContainer.classList.remove('scroll-disabled');
                     }
                 }
             }
@@ -233,7 +299,13 @@ export class UIManager {
             const closeModal = e.target.closest('.close-modal');
             if (closeModal) {
                 const modalId = closeModal.dataset.modal;
-                if (modalId) document.getElementById(modalId)?.classList.add('hidden');
+                if (modalId) {
+                    const modal = document.getElementById(modalId);
+                    if (modal) {
+                        modal.classList.add('hidden');
+                        document.body.classList.remove('modal-open');
+                    }
+                }
             }
             
             // Summary
@@ -344,6 +416,26 @@ export class UIManager {
             }
         });
         
+        // Unlinked transfers filter checkbox
+        const unlinkedTransfersCheckbox = document.getElementById('filter-unlinked-transfers');
+        if (unlinkedTransfersCheckbox) {
+            unlinkedTransfersCheckbox.addEventListener('change', async () => {
+                this.applyTransactionFilters();
+                this.updateFilterIndicator();
+                await this.transactionUI.renderTransactionsTab();
+            });
+        }
+        
+        // Uncategorized filter checkbox
+        const uncategorizedCheckbox = document.getElementById('filter-uncategorized');
+        if (uncategorizedCheckbox) {
+            uncategorizedCheckbox.addEventListener('change', async () => {
+                this.applyTransactionFilters();
+                this.updateFilterIndicator();
+                await this.transactionUI.renderTransactionsTab();
+            });
+        }
+        
         // Enter key for passwords
         document.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
@@ -381,12 +473,14 @@ export class UIManager {
         // Hide all tabs
         document.querySelectorAll('.tab-content').forEach(tab => {
             tab.classList.remove('active');
+            tab.classList.add('hidden');
         });
         
         // Show selected tab
         const targetTab = document.getElementById(`tab-${tabName}`);
         if (targetTab) {
             targetTab.classList.add('active');
+            targetTab.classList.remove('hidden');
         }
         
         // Show/hide FABs
@@ -419,7 +513,9 @@ export class UIManager {
         }
         
         // Render content
-        if (tabName === 'transactions') {
+        if (tabName === 'home') {
+            this.homeUI.renderHomeTab();
+        } else if (tabName === 'transactions') {
             this.transactionUI.renderTransactionsTab();
         } else if (tabName === 'budget') {
             this.budgetUI.renderBudgetTab(async () => await this.budgetUI.updateSummaryCards());
@@ -442,6 +538,8 @@ export class UIManager {
         const amountMax = document.getElementById('filter-amount-max');
         const dateStart = document.getElementById('filter-date-start');
         const dateEnd = document.getElementById('filter-date-end');
+        const unlinkedTransfers = document.getElementById('filter-unlinked-transfers');
+        const uncategorized = document.getElementById('filter-uncategorized');
         
         this.transactionUI.filters.categories = Array.from(categorySelect.selectedOptions).map(o => o.value);
         this.transactionUI.filters.accounts = Array.from(accountSelect.selectedOptions).map(o => o.value);
@@ -450,6 +548,8 @@ export class UIManager {
         this.transactionUI.filters.amountMax = amountMax.value ? parseFloat(amountMax.value) : null;
         this.transactionUI.filters.dateStart = dateStart.value || null;
         this.transactionUI.filters.dateEnd = dateEnd.value || null;
+        this.transactionUI.filters.unlinkedTransfersOnly = unlinkedTransfers ? unlinkedTransfers.checked : false;
+        this.transactionUI.filters.uncategorizedOnly = uncategorized ? uncategorized.checked : false;
     }
 
     clearTransactionFilters() {
@@ -463,6 +563,16 @@ export class UIManager {
         document.getElementById('filter-date-end').value = '';
         document.getElementById('sort-field').value = 'date';
         document.getElementById('sort-order').value = 'desc';
+        
+        const unlinkedTransfersCheckbox = document.getElementById('filter-unlinked-transfers');
+        if (unlinkedTransfersCheckbox) {
+            unlinkedTransfersCheckbox.checked = false;
+        }
+        
+        const uncategorizedCheckbox = document.getElementById('filter-uncategorized');
+        if (uncategorizedCheckbox) {
+            uncategorizedCheckbox.checked = false;
+        }
         
         document.getElementById('search-description').checked = true;
         document.getElementById('search-account').checked = false;
@@ -480,7 +590,9 @@ export class UIManager {
             amountMin: null,
             amountMax: null,
             dateStart: null,
-            dateEnd: null
+            dateEnd: null,
+            unlinkedTransfersOnly: false,
+            uncategorizedOnly: false
         };
     }
 

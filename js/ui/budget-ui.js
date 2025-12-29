@@ -45,17 +45,22 @@ export class BudgetUI {
         `;
         
         if (categories.length === 0) {
-            container.innerHTML = monthHeader + `
-                <div class="empty-state">
-                    <div class="empty-state-icon">
-                        <i data-lucide="wallet" style="width: 64px; height: 64px;"></i>
+            container.innerHTML = `
+                ${monthHeader}
+                <div class="budget-scroll-container">
+                    <div class="budget-container">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <i data-lucide="wallet" style="width: 64px; height: 64px;"></i>
+                            </div>
+                            <h3>No Categories Yet</h3>
+                            <p>Create your first budget category to get started</p>
+                            <button class="btn-primary" id="fab-add-category-inline">
+                                <i data-lucide="plus"></i>
+                                <span>Add Category</span>
+                            </button>
+                        </div>
                     </div>
-                    <h3>No Categories Yet</h3>
-                    <p>Create your first budget category to get started</p>
-                    <button class="btn-primary" id="fab-add-category-inline">
-                        <i data-lucide="plus"></i>
-                        <span>Add Category</span>
-                    </button>
                 </div>
             `;
             
@@ -117,8 +122,9 @@ export class BudgetUI {
         };
         
         html = monthHeader;
+        html += '<div class="budget-scroll-container"><div class="budget-container">';
         
-        for (const type of ['Income', 'Expense', 'Saving', 'Transfer']) {
+        for (const type of ['Income', 'Expense', 'Saving']) {
             if (grouped[type].length === 0) continue;
             
             html += `
@@ -160,6 +166,8 @@ export class BudgetUI {
             
             html += `</div>`;
         }
+        
+        html += '</div></div>'; // Close budget-container and budget-scroll-container
         
         // Add FAB with menu
         html += `
@@ -368,6 +376,7 @@ export class BudgetUI {
         }
         
         modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
         
         if (typeof lucide !== 'undefined') {
             lucide.createIcons();
@@ -413,6 +422,7 @@ export class BudgetUI {
             }
             
             document.getElementById('category-modal').classList.add('hidden');
+            document.body.classList.remove('modal-open');
             
             if (onSuccess) {
                 await onSuccess();
@@ -440,6 +450,7 @@ export class BudgetUI {
         try {
             await this.db.deleteCategory(categoryId);
             document.getElementById('category-modal').classList.add('hidden');
+            document.body.classList.remove('modal-open');
             
             if (onSuccess) {
                 await onSuccess();

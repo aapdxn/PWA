@@ -9,10 +9,10 @@ export class DatabaseManager {
         
         this.db = new Dexie('VaultBudget');
         
-        this.db.version(6).stores({
+        this.db.version(7).stores({
             settings: 'key',
             categories: '++id, type',
-            transactions: '++id, categoryId',
+            transactions: '++id, categoryId, encrypted_linkedTransactionId',
             mappings_accounts: 'account_number',
             mappings_descriptions: 'description',
             category_budgets: '[categoryId+month]'
@@ -62,7 +62,9 @@ export class DatabaseManager {
 
     async saveTransaction(transaction) {
         if (transaction.id) {
-            await this.db.transactions.update(transaction.id, transaction);
+            // Use put() instead of update() to replace the entire record
+            // This ensures fields not in the transaction object are removed
+            await this.db.transactions.put(transaction);
             return transaction.id;
         } else {
             return await this.db.transactions.add(transaction);
@@ -103,6 +105,10 @@ export class DatabaseManager {
 
     async deleteMappingDescription(description) {
         await this.db.mappings_descriptions.delete(description);
+    }
+
+    async getMappingAccount(accountNumber) {
+        return await this.db.mappings_accounts.get(accountNumber);
     }
 
     async getCategoryBudget(categoryId, month) {

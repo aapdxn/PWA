@@ -56,13 +56,18 @@ export class CSVEngine {
                     // Decrypt the category name
                     const categoryName = await this.security.decrypt(descMapping.encrypted_category);
                     
-                    // Find the category by name
-                    const allCategories = await this.db.getAllCategories();
-                    for (const cat of allCategories) {
-                        const name = await this.security.decrypt(cat.encrypted_name);
-                        if (name === categoryName) {
-                            suggestedCategoryId = cat.id;
-                            break;
+                    // Check if it's Transfer type
+                    if (categoryName === 'Transfer') {
+                        suggestedCategoryId = 'TRANSFER';
+                    } else {
+                        // Find the category by name
+                        const allCategories = await this.db.getAllCategories();
+                        for (const cat of allCategories) {
+                            const name = await this.security.decrypt(cat.encrypted_name);
+                            if (name === categoryName) {
+                                suggestedCategoryId = cat.id;
+                                break;
+                            }
                         }
                     }
                 } catch (error) {
@@ -103,20 +108,29 @@ export class CSVEngine {
                 continue;
             }
             
+            // Check if Transfer type (categoryId === 'TRANSFER')
+            const isTransfer = item.categoryId === 'TRANSFER';
+            
             // Create transaction object
             const transaction = {
                 encrypted_date: await this.security.encrypt(item.date),
                 encrypted_amount: await this.security.encrypt(item.amount.toString()),
                 encrypted_description: await this.security.encrypt(item.description),
                 encrypted_account: await this.security.encrypt(item.accountNumber),
-                categoryId: item.categoryId || null
+                categoryId: isTransfer ? null : (item.categoryId || null)
             };
+            
+            // Only add encrypted_linkedTransactionId for Transfer type
+            // This distinguishes Transfers (has field = null) from Uncategorized (no field)
+            if (isTransfer) {
+                transaction.encrypted_linkedTransactionId = null; // Transfers imported via CSV are initially unlinked
+            }
             
             const id = await this.db.saveTransaction(transaction);
             imported.push(id);
             
-            // Save mapping if requested
-            if (item.saveMapping && item.categoryId) {
+            // Save mapping if requested (not applicable for Transfer type)
+            if (item.saveMapping && item.categoryId && !isTransfer) {
                 const category = await this.db.getCategory(item.categoryId);
                 const categoryName = await this.security.decrypt(category.encrypted_name);
                 await this.db.setMappingDescription(
@@ -179,7 +193,10 @@ export class CSVEngine {
                 if (!description) continue;
                 
                 const normalizedCategoryName = categoryName.toLowerCase();
-                const categoryId = categoryByName[normalizedCategoryName] || null;
+                
+                // Check if Transfer type (special case - not a category)
+                const isTransfer = normalizedCategoryName === 'transfer';
+                const categoryId = isTransfer ? 'TRANSFER' : (categoryByName[normalizedCategoryName] || null);
                 const isDuplicate = existingDescriptions.has(description.toLowerCase());
                 
                 console.log(`📋 Mapping: "${description}" → "${categoryName}" (ID: ${categoryId}, Duplicate: ${isDuplicate})`);
@@ -208,8 +225,15 @@ export class CSVEngine {
             if (item.skip || item.isDuplicate) continue;
             if (!item.categoryId) continue;
             
-            const category = await this.db.getCategory(item.categoryId);
-            const categoryName = await this.security.decrypt(category.encrypted_name);
+            let categoryName;
+            
+            // Check if Transfer type
+            if (item.categoryId === 'TRANSFER') {
+                categoryName = 'Transfer';
+            } else {
+                const category = await this.db.getCategory(item.categoryId);
+                categoryName = await this.security.decrypt(category.encrypted_name);
+            }
             
             await this.db.setMappingDescription(
                 item.description,

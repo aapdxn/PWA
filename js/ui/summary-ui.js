@@ -25,12 +25,14 @@ export class SummaryUI {
         
         if (transactions.length === 0 || categories.length === 0) {
             container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">
-                        <i data-lucide="bar-chart-2" style="width: 64px; height: 64px;"></i>
+                <div class="summary-scroll-container">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <i data-lucide="bar-chart-2" style="width: 64px; height: 64px;"></i>
+                        </div>
+                        <h3>No Data to Summarize</h3>
+                        <p>Add transactions to see summary charts and analytics</p>
                     </div>
-                    <h3>No Data to Summarize</h3>
-                    <p>Add transactions to see summary charts and analytics</p>
                 </div>
             `;
             
@@ -62,7 +64,7 @@ export class SummaryUI {
         const summary = await this.calculateSummaryData(transactions, categories);
         
         // Build HTML with donut charts and tables
-        let html = filterHTML + '<div class="summary-sections">';
+        let html = filterHTML + '<div class="summary-scroll-container"><div class="summary-sections">';
         
         // Render each category type section
         for (const type of ['Income', 'Expense', 'Saving']) {
@@ -71,7 +73,7 @@ export class SummaryUI {
             html += this.renderCategorySection(type, summary[type]);
         }
         
-        html += '</div>';
+        html += '</div></div>'; // Close summary-sections and summary-scroll-container
         
         container.innerHTML = html;
         

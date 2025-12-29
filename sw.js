@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2.26.5'; // Fixed: FAB menus now close when switching tabs
+const CACHE_VERSION = 'v2.38.3'; // Simplified unmapped accounts notification to show count only
 const CACHE_NAME = `vault-budget-${CACHE_VERSION}`;
 
 // Cache only local files that exist
@@ -13,6 +13,7 @@ const urlsToCache = [
     '/js/core/csv-mapper.js',
     '/js/ui/ui-manager.js',
     '/js/ui/auth-ui.js',
+    '/js/ui/home-ui.js',
     '/js/ui/transaction-ui.js',
     '/js/ui/budget-ui.js',
     '/js/ui/summary-ui.js',
@@ -20,6 +21,8 @@ const urlsToCache = [
     '/js/ui/settings-ui.js',
     '/js/ui/modal-manager.js',
     '/js/ui/csv-review-ui.js',
+    '/js/ui/account-mappings-ui.js',
+    '/js/ui/custom-select.js',
     '/css/base.css',
     '/css/components.css',
     '/css/layout.css',

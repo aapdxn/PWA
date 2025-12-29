@@ -26,6 +26,8 @@ html {
     height: 100%;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    overscroll-behavior: none; /* Disable pull-to-refresh */
 }
 
 body {
@@ -35,6 +37,7 @@ body {
     min-height: 100vh;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     overflow-x: hidden;
+    overscroll-behavior: none; /* Disable pull-to-refresh */
 }
 
 /* Prevent zoom on input focus (iOS) */

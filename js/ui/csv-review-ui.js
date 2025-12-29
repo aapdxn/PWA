@@ -1,8 +1,14 @@
 // CSV Review UI - Handles CSV import review page, filtering, and import operations
+import { CustomSelect } from './custom-select.js';
+
 export class CSVReviewUI {
-    constructor(security, db) {
+    constructor(security, db, accountMappingsUI) {
         this.security = security;
         this.db = db;
+        this.accountMappingsUI = accountMappingsUI;
+        
+        // Custom select instances for CSV items
+        this.csvCategorySelects = [];
         
         // Search/Filter state for CSV review
         this.csvSearchQuery = '';
@@ -125,7 +131,11 @@ export class CSVReviewUI {
                     </div>
                     
                     <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 0.75rem;">
-                        <button class="btn-secondary" id="csv-skip-all" style="width: auto; padding: 0.5rem 1rem; font-size: 0.875rem; margin-left: auto;">
+                        <button class="btn-secondary" id="csv-set-category-all" style="width: auto; padding: 0.5rem 1rem; font-size: 0.875rem; margin-left: auto;">
+                            <i data-lucide="tag"></i>
+                            Set Category for All Visible
+                        </button>
+                        <button class="btn-secondary" id="csv-skip-all" style="width: auto; padding: 0.5rem 1rem; font-size: 0.875rem;">
                             <i data-lucide="x-circle"></i>
                             Skip All Visible
                         </button>
@@ -156,18 +166,23 @@ export class CSVReviewUI {
         // Show CSV import page, hide others
         document.querySelectorAll('.tab-content').forEach(tab => {
             tab.classList.remove('active');
+            tab.classList.add('hidden');
         });
         csvPage.classList.remove('hidden');
         csvPage.classList.add('active');
         
-        // Hide bottom navigation and FAB
+        // Hide bottom navigation and all FABs
         const bottomNav = document.querySelector('.bottom-nav');
-        const fab = document.querySelector('.fab');
         if (bottomNav) bottomNav.style.display = 'none';
-        if (fab) fab.classList.add('hidden');
+        
+        // Hide all FABs (there are multiple)
+        document.querySelectorAll('.fab').forEach(fab => fab.classList.add('hidden'));
         
         // Attach all event listeners
         this.attachEventListeners(csvPage, processedData, csvEngine, allCategories);
+        
+        // Initialize custom selects for CSV items
+        this.initializeCSVCustomSelects();
         
         // Initialize Lucide icons
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -265,6 +280,11 @@ export class CSVReviewUI {
         // Skip All handler
         document.getElementById('csv-skip-all')?.addEventListener('click', () => {
             this.skipAllVisibleCSVItems(modal, processedData);
+        });
+        
+        // Set Category for All handler
+        document.getElementById('csv-set-category-all')?.addEventListener('click', async () => {
+            await this.setCategoryForAllVisible(modal, processedData, allCategories);
         });
         
         // Attach review list-specific listeners
@@ -405,7 +425,7 @@ export class CSVReviewUI {
                             <div style="display: flex; gap: 1rem; align-items: center;">
                                 <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.875rem;">
                                     <input type="radio" name="mapping-type-${i}" value="auto" class="csv-mapping-type" data-index="${i}" ${hasAutoMapping ? 'checked' : ''}>
-                                    Auto ${hasAutoMapping ? `<span style="color: var(--success-color); font-weight: 600;">(${categoryNames[item.suggestedCategoryId]})</span>` : ''}
+                                    Auto ${hasAutoMapping ? `<span style="color: var(--success-color); font-weight: 600;">(${item.suggestedCategoryId === 'TRANSFER' ? 'Transfer' : categoryNames[item.suggestedCategoryId]})</span>` : ''}
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.875rem;">
                                     <input type="radio" name="mapping-type-${i}" value="manual" class="csv-mapping-type" data-index="${i}" ${!hasAutoMapping ? 'checked' : ''}>
@@ -420,6 +440,7 @@ export class CSVReviewUI {
                                         const selected = cat.id === item.suggestedCategoryId ? 'selected' : '';
                                         return `<option value="${cat.id}" ${selected}>${categoryNames[cat.id]}</option>`;
                                     }).join('')}
+                                    <option value="TRANSFER" ${item.suggestedCategoryId === 'TRANSFER' ? 'selected' : ''}>Transfer</option>
                                 </select>
                                 <button class="btn-primary csv-save-mapping hidden" data-index="${i}" style="padding: 0.5rem; font-size: 1rem; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="Save as Auto Mapping">
                                     <i data-lucide="check"></i>
@@ -539,6 +560,9 @@ export class CSVReviewUI {
                 item.element.style.display = '';
                 container.appendChild(item.element);
             });
+            
+            // Initialize custom selects for visible items
+            this.initializeCSVCustomSelects();
         }
         
         // Update count
@@ -546,6 +570,26 @@ export class CSVReviewUI {
         if (visibleCount) {
             visibleCount.textContent = visibleItems.length;
         }
+    }
+
+    initializeCSVCustomSelects() {
+        // Destroy existing custom selects
+        this.csvCategorySelects.forEach(cs => {
+            try {
+                cs.destroy();
+            } catch (e) {
+                // Ignore if already destroyed
+            }
+        });
+        this.csvCategorySelects = [];
+        
+        // Initialize custom selects for all category dropdowns
+        document.querySelectorAll('.csv-category-select').forEach(select => {
+            if (select.offsetParent !== null) { // Only initialize if visible
+                const customSelect = new CustomSelect(select);
+                this.csvCategorySelects.push(customSelect);
+            }
+        });
     }
 
     skipAllVisibleCSVItems(modal, processedData) {
@@ -572,6 +616,149 @@ export class CSVReviewUI {
                 if (typeof lucide !== 'undefined') lucide.createIcons();
             }, 1500);
         }
+    }
+
+    async setCategoryForAllVisible(modal, processedData, allCategories) {
+        // Get visible, non-skipped items
+        const visibleItems = modal.querySelectorAll('.csv-review-item:not([style*="display: none"])');
+        const eligibleItems = [];
+        
+        visibleItems.forEach(item => {
+            const index = parseInt(item.dataset.itemIndex);
+            const dataItem = processedData[index];
+            if (!dataItem.isDuplicate && !dataItem.skip) {
+                eligibleItems.push({ index, item: dataItem, element: item });
+            }
+        });
+        
+        if (eligibleItems.length === 0) {
+            alert('No eligible transactions found. All visible transactions are either duplicates or skipped.');
+            return;
+        }
+        
+        // Show category selection modal
+        const selectedCategoryId = await this.showBulkCategoryModal(allCategories, eligibleItems.length);
+        
+        if (selectedCategoryId === null) {
+            return; // User cancelled
+        }
+        
+        // Apply category to all eligible items
+        let updatedCount = 0;
+        eligibleItems.forEach(({ index, item, element }) => {
+            // Set the category in the data
+            item.suggestedCategoryId = selectedCategoryId;
+            item.categoryId = selectedCategoryId;
+            
+            // Update UI to reflect Auto mode with the selected category
+            const autoRadio = element.querySelector('input[value="auto"]');
+            const categorySelect = element.querySelector('.csv-category-select');
+            const saveButton = element.querySelector('.csv-save-mapping');
+            
+            if (autoRadio) {
+                autoRadio.checked = true;
+                if (categorySelect) {
+                    categorySelect.value = selectedCategoryId;
+                    categorySelect.disabled = true;
+                }
+                if (saveButton) {
+                    saveButton.classList.add('hidden');
+                }
+            }
+            
+            // Update session mapping for this description
+            this.importSessionMappings[item.description] = selectedCategoryId;
+            updatedCount++;
+        });
+        
+        // Rebuild the review list to show updated Auto labels
+        const reviewList = modal.querySelector('#csv-review-list');
+        if (reviewList) {
+            reviewList.innerHTML = await this.buildCSVReviewList(processedData, allCategories);
+            this.attachCSVReviewListeners(modal, processedData, null, allCategories);
+            this.initializeCSVCustomSelects();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+        
+        // Re-apply filters to maintain current view
+        this.applyCSVFiltersAndSort(modal, processedData);
+        
+        // Show success feedback
+        const setCategoryBtn = document.getElementById('csv-set-category-all');
+        if (setCategoryBtn) {
+            const originalText = setCategoryBtn.innerHTML;
+            setCategoryBtn.innerHTML = `<i data-lucide="check"></i> Updated ${updatedCount}`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            setTimeout(() => {
+                setCategoryBtn.innerHTML = originalText;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }, 1500);
+        }
+    }
+
+    async showBulkCategoryModal(allCategories, transactionCount) {
+        return new Promise(async (resolve) => {
+            // Decrypt category names
+            const categoryNames = {};
+            for (const cat of allCategories) {
+                categoryNames[cat.id] = await this.security.decrypt(cat.encrypted_name);
+            }
+            
+            const modalHTML = `
+                <div class="modal-overlay" id="bulk-category-modal">
+                    <div class="modal-content" style="max-width: 500px;">
+                        <div class="modal-header">
+                            <h2>Set Category for All Visible</h2>
+                        </div>
+                        <div class="modal-body">
+                            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                                Select a category to apply to <strong>${transactionCount}</strong> visible transaction${transactionCount !== 1 ? 's' : ''}.
+                            </p>
+                            <select id="bulk-category-select" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 1rem;">
+                                <option value="">Select Category...</option>
+                                ${allCategories.map(cat => 
+                                    `<option value="${cat.id}">${categoryNames[cat.id]}</option>`
+                                ).join('')}
+                                <option value="TRANSFER">Transfer</option>
+                            </select>
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn btn-secondary" id="bulk-category-cancel">Cancel</button>
+                            <button class="btn btn-primary" id="bulk-category-confirm">Apply</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            const modalElement = document.getElementById('bulk-category-modal');
+            const selectElement = document.getElementById('bulk-category-select');
+            
+            // Cancel handler
+            document.getElementById('bulk-category-cancel')?.addEventListener('click', () => {
+                modalElement.remove();
+                resolve(null);
+            });
+            
+            // Confirm handler
+            document.getElementById('bulk-category-confirm')?.addEventListener('click', () => {
+                const selectedValue = selectElement.value;
+                if (!selectedValue) {
+                    alert('Please select a category');
+                    return;
+                }
+                modalElement.remove();
+                resolve(selectedValue);
+            });
+            
+            // Close on overlay click
+            modalElement.addEventListener('click', (e) => {
+                if (e.target === modalElement) {
+                    modalElement.remove();
+                    resolve(null);
+                }
+            });
+        });
     }
 
     closeCSVImportPage() {
@@ -619,8 +806,27 @@ export class CSVReviewUI {
         });
         
         try {
+            // Auto-populate account mappings for all unique accounts
+            const uniqueAccounts = new Set();
+            for (const item of preparedItems) {
+                if (item.accountNumber) {
+                    uniqueAccounts.add(item.accountNumber);
+                }
+            }
+            for (const accountNumber of uniqueAccounts) {
+                await this.accountMappingsUI.ensureAccountMappingExists(accountNumber);
+            }
+            
             const imported = await csvEngine.importReviewedTransactions(preparedItems);
-            alert(`Successfully imported ${imported.length} transaction(s)`);
+            
+            // Count uncategorized transactions (no categoryId and no encrypted_linkedTransactionId field)
+            const uncategorized = imported.filter(t => !t.categoryId && t.encrypted_linkedTransactionId === undefined);
+            
+            let message = `Successfully imported ${imported.length} transaction(s)`;
+            if (uncategorized.length > 0) {
+                message += `\n\n${uncategorized.length} transaction(s) have no category assigned.`;
+            }
+            alert(message);
             
             // Trigger transaction refresh if available
             if (this.onImportSuccess) {

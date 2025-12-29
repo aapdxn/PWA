@@ -109,7 +109,11 @@
             
             <!-- Tab Content -->
             <main>
-                <div id="tab-transactions" class="tab-content active">
+                <div id="tab-home" class="tab-content active">
+                    <div id="home-content"></div>
+                </div>
+                
+                <div id="tab-transactions" class="tab-content">
                     <!-- Search Bar -->
                     <div class="search-bar">
                         <div class="search-input-wrapper">
@@ -135,6 +139,19 @@
                                         <label><input type="checkbox" id="search-account"> Account</label>
                                         <label><input type="checkbox" id="search-category"> Category</label>
                                         <label><input type="checkbox" id="search-note"> Note</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle">
+                                    <span>Quick Filters</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content">
+                                    <div class="checkbox-group">
+                                        <label><input type="checkbox" id="filter-unlinked-transfers"> Unlinked Transfers Only</label>
+                                        <label><input type="checkbox" id="filter-uncategorized"> Uncategorized Only</label>
                                     </div>
                                 </div>
                             </div>
@@ -254,12 +271,29 @@
                     <div id="summary-container"></div>
                 </div>
                 
-                <div id="tab-mappings" class="tab-content">
+                <div id="tab-mappings" class="tab-content hidden">
+                    <div class="page-header">
+                        <button id="category-mappings-back" class="btn-icon">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <h2>Category Mappings</h2>
+                    </div>
                     <div id="mappings-list"></div>
                 </div>
                 
                 <div id="tab-settings" class="tab-content">
                     <div id="settings-content"></div>
+                </div>
+                
+                <!-- Account Mappings Page (accessed from Settings) -->
+                <div id="account-mappings-page" class="tab-content hidden">
+                    <div class="page-header">
+                        <button id="account-mappings-back" class="btn-icon">
+                            <i data-lucide="arrow-left"></i>
+                        </button>
+                        <h2>Account Mappings</h2>
+                    </div>
+                    <div id="account-mappings-content"></div>
                 </div>
                 
                 <!-- CSV Import Page (Not in bottom nav, accessed via FAB) -->
@@ -318,7 +352,11 @@
             
             <!-- Bottom Navigation -->
             <nav class="bottom-nav">
-                <button class="nav-item active" data-tab="transactions">
+                <button class="nav-item active" data-tab="home">
+                    <i data-lucide="home"></i>
+                    <span>Home</span>
+                </button>
+                <button class="nav-item" data-tab="transactions">
                     <i data-lucide="list"></i>
                     <span>Transactions</span>
                 </button>
@@ -329,10 +367,6 @@
                 <button class="nav-item" data-tab="summary">
                     <i data-lucide="bar-chart-2"></i>
                     <span>Summary</span>
-                </button>
-                <button class="nav-item" data-tab="mappings">
-                    <i data-lucide="link"></i>
-                    <span>Mappings</span>
                 </button>
                 <button class="nav-item" data-tab="settings">
                     <i data-lucide="settings"></i>
@@ -368,6 +402,12 @@
                         <option value="">Select category...</option>
                     </select>
                 </div>
+                <div class="input-group" id="transaction-link-group" style="display: none;">
+                    <label for="transaction-link">Link to Transfer *</label>
+                    <select id="transaction-link">
+                        <option value="">Select transaction to link...</option>
+                    </select>
+                </div>
                 <div class="input-group">
                     <label for="transaction-description">Description</label>
                     <input type="text" id="transaction-description" autocomplete="off" 
@@ -377,11 +417,6 @@
                     <label for="transaction-account">Account</label>
                     <input type="text" id="transaction-account" autocomplete="off" 
                            placeholder="e.g., Checking">
-                </div>
-                <div class="input-group">
-                    <label for="transaction-note">Note</label>
-                    <textarea id="transaction-note" rows="3" autocomplete="off" 
-                              placeholder="Optional note..."></textarea>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn-secondary close-modal" data-modal="transaction-modal">Cancel</button>
@@ -415,7 +450,6 @@
                         <option value="Income">Income</option>
                         <option value="Expense" selected>Expense</option>
                         <option value="Saving">Saving</option>
-                        <option value="Transfer">Transfer</option>
                     </select>
                 </div>
                 <div class="modal-actions">
@@ -453,6 +487,11 @@
         <div class="modal-content">
             <!-- Populated by JavaScript -->
         </div>
+    </div>
+    
+    <!-- Modal: Account Mapping Edit -->
+    <div id="account-mapping-modal" class="modal hidden">
+        <!-- Populated by JavaScript -->
     </div>
     
     <!-- Lucide Icons Initialization -->

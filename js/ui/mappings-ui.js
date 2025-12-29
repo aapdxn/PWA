@@ -1,10 +1,15 @@
 // MappingsUI - Handles mappings tab, modals, CSV import, and filtering
+import { CustomSelect } from './custom-select.js';
+
 export class MappingsUI {
     constructor(security, db, csvEngine, modalManager) {
         this.security = security;
         this.db = db;
         this.csvEngine = csvEngine;
         this.modalManager = modalManager;
+        
+        // Custom select instance
+        this.mappingCategorySelect = null;
         
         // State
         this.allMappingsData = [];
@@ -63,7 +68,7 @@ export class MappingsUI {
                         <input type="text" id="mappings-search" placeholder="Search mappings..." />
                     </div>
                     <button class="search-menu-btn" id="mappings-filter-toggle">
-                        <i data-lucide="sliders"></i>
+                        <i data-lucide="menu"></i>
                     </button>
                 </div>
                 <div style="position: sticky; top: 44px; background: var(--bg-secondary); z-index: 10; padding: 0 16px; border-bottom: 1px solid var(--border-color);">
@@ -95,10 +100,8 @@ export class MappingsUI {
             
             container.innerHTML = `
                 ${headerHTML}
-                <div style="padding: 16px; padding-bottom: 80px;">
-                    <div id="mappings-scroll-container" style="max-height: calc(100vh - 250px); overflow-y: auto;">
-                        ${mappingsHTML}
-                    </div>
+                <div class="mappings-scroll-container">
+                    ${mappingsHTML}
                 </div>
             `;
             
@@ -109,9 +112,20 @@ export class MappingsUI {
             
             const filterToggle = document.getElementById('mappings-filter-toggle');
             const filterPanel = document.getElementById('mappings-filter-panel');
+            const mappingsScrollContainer = document.querySelector('.mappings-scroll-container');
             if (filterToggle && filterPanel) {
                 filterToggle.addEventListener('click', () => {
                     filterPanel.classList.toggle('hidden');
+                    // Disable scrolling on main mappings list when filter is open
+                    if (!filterPanel.classList.contains('hidden')) {
+                        if (mappingsScrollContainer) {
+                            mappingsScrollContainer.classList.add('scroll-disabled');
+                        }
+                    } else {
+                        if (mappingsScrollContainer) {
+                            mappingsScrollContainer.classList.remove('scroll-disabled');
+                        }
+                    }
                 });
             }
             
@@ -160,10 +174,13 @@ export class MappingsUI {
                                 .map(m => m.categoryName)
                         )];
                         
-                        console.log('🔍 Unmapped categories:', unmappedCategories);
+                        // Filter out Transfer from unmapped (it's handled as a special type)
+                        const categoriesToResolve = unmappedCategories.filter(c => c.toLowerCase() !== 'transfer');
                         
-                        if (unmappedCategories.length > 0) {
-                            const categoryResolutions = await this.modalManager.showCategoryResolutionModal(unmappedCategories);
+                        console.log('🔍 Unmapped categories:', categoriesToResolve);
+                        
+                        if (categoriesToResolve.length > 0) {
+                            const categoryResolutions = await this.modalManager.showCategoryResolutionModal(categoriesToResolve);
                             
                             if (!categoryResolutions) {
                                 e.target.value = '';
@@ -276,6 +293,7 @@ export class MappingsUI {
                             <select id="mapping-category" required>
                                 <option value="">Select category...</option>
                                 ${categoryOptions.join('')}
+                                <option value="TRANSFER">Transfer</option>
                             </select>
                         </div>
                         <div class="modal-actions">
@@ -338,6 +356,16 @@ export class MappingsUI {
             document.getElementById('mapping-payee').value = payee;
         }
         
+        // Initialize custom select
+        if (!this.mappingCategorySelect) {
+            const categorySelectEl = document.getElementById('mapping-category');
+            if (categorySelectEl) {
+                this.mappingCategorySelect = new CustomSelect(categorySelectEl);
+            }
+        } else {
+            this.mappingCategorySelect.refresh();
+        }
+        
         // Handle form submission
         const mappingForm = document.getElementById('mapping-form');
         mappingForm.addEventListener('submit', async (e) => {
@@ -381,21 +409,31 @@ export class MappingsUI {
     async saveMappingFromForm(categories, mapping) {
         const description = document.getElementById('mapping-description').value.trim();
         const payee = document.getElementById('mapping-payee').value.trim();
-        const categoryId = parseInt(document.getElementById('mapping-category').value);
+        const categoryValue = document.getElementById('mapping-category').value;
         
         if (!description) {
             alert('Please enter a description');
             return;
         }
         
-        if (!categoryId) {
+        if (!categoryValue) {
             alert('Please select a category');
             return;
         }
         
         try {
-            const category = categories.find(c => c.id === categoryId);
-            const categoryName = await this.security.decrypt(category.encrypted_name);
+            let categoryName = 'Transfer';
+            
+            // Check if Transfer type or regular category
+            if (categoryValue !== 'TRANSFER') {
+                const categoryId = parseInt(categoryValue);
+                const category = categories.find(c => c.id === categoryId);
+                if (!category) {
+                    alert('Category not found');
+                    return;
+                }
+                categoryName = await this.security.decrypt(category.encrypted_name);
+            }
             
             await this.db.setMappingDescription(
                 description,
@@ -518,14 +556,18 @@ export class MappingsUI {
         
         this.previousTab = this.currentTab || 'mappings';
         
-        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+            tab.classList.add('hidden');
+        });
         mappingsPage.classList.remove('hidden');
         mappingsPage.classList.add('active');
         
         const bottomNav = document.querySelector('.bottom-nav');
-        const fab = document.querySelector('.fab');
         if (bottomNav) bottomNav.style.display = 'none';
-        if (fab) fab.classList.add('hidden');
+        
+        // Hide all FABs (there are multiple)
+        document.querySelectorAll('.fab').forEach(fab => fab.classList.add('hidden'));
         
         const modal = mappingsPage;
         

@@ -31,8 +31,13 @@ export class CSVEngine {
 
     /**
      * Process transaction CSV and return structured data for review
+     * @param {File} file - CSV file to process
+     * @param {string} formatId - CSV format identifier (e.g., 'capital-one-checking')
      */
-    async processTransactionCSV(file) {
+    async processTransactionCSV(file, formatId = 'capital-one-checking') {
+        // Set the format for the mapper
+        this.mapper.setFormat(formatId);
+        
         const rows = await this.parseCSV(file);
         const processed = [];
         
@@ -50,6 +55,7 @@ export class CSVEngine {
             // Try to find category from mappings
             const descMapping = await this.mapper.getDescriptionMapping(mapped.description);
             let suggestedCategoryId = null;
+            let suggestedPayeeId = null;
             
             if (descMapping && descMapping.encrypted_category) {
                 try {
@@ -75,6 +81,33 @@ export class CSVEngine {
                 }
             }
             
+            // Try to find payee from mappings
+            if (descMapping && descMapping.encrypted_payee) {
+                try {
+                    const payeeName = await this.security.decrypt(descMapping.encrypted_payee);
+                    if (payeeName) {
+                        // Find the payee by name
+                        const allPayees = await this.db.getAllPayees();
+                        for (const payee of allPayees) {
+                            const name = await this.security.decrypt(payee.encrypted_name);
+                            if (name === payeeName) {
+                                suggestedPayeeId = payee.id;
+                                break;
+                            }
+                        }
+                        
+                        // If payee doesn't exist, create it
+                        if (!suggestedPayeeId) {
+                            suggestedPayeeId = await this.db.savePayee({
+                                encrypted_name: await this.security.encrypt(payeeName)
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Failed to decrypt payee mapping:', error);
+                }
+            }
+            
             // Get account name from mapping
             const acctMapping = await this.mapper.getAccountMapping(mapped.accountNumber);
             const accountName = acctMapping ? 
@@ -89,6 +122,7 @@ export class CSVEngine {
                 accountName: accountName,
                 transactionType: mapped.transactionType,
                 suggestedCategoryId: suggestedCategoryId,
+                suggestedPayeeId: suggestedPayeeId,
                 isDuplicate: isDuplicate,
                 originalRow: mapped.originalRow
             });
@@ -109,7 +143,17 @@ export class CSVEngine {
             }
             
             // Check if Transfer type (categoryId === 'TRANSFER')
-            const isTransfer = item.categoryId === 'TRANSFER';
+            const isTransfer = item.categoryId === 'TRANSFER' || item.suggestedCategoryId === 'TRANSFER';
+            
+            // Use suggested IDs if no explicit override was set during review
+            const categoryId = item.categoryId !== undefined ? item.categoryId : item.suggestedCategoryId;
+            const payeeId = item.payeeId !== undefined ? item.payeeId : item.suggestedPayeeId;
+            
+            // Determine if we should use auto-mapping flags
+            // If a mapping exists and wasn't explicitly overridden, use auto mode
+            const hasMapping = await this.mapper.getDescriptionMapping(item.description);
+            const useAutoCategory = !isTransfer && hasMapping && hasMapping.encrypted_category && item.categoryId === undefined;
+            const useAutoPayee = hasMapping && hasMapping.encrypted_payee && item.payeeId === undefined;
             
             // Create transaction object
             const transaction = {
@@ -117,7 +161,10 @@ export class CSVEngine {
                 encrypted_amount: await this.security.encrypt(item.amount.toString()),
                 encrypted_description: await this.security.encrypt(item.description),
                 encrypted_account: await this.security.encrypt(item.accountNumber),
-                categoryId: isTransfer ? null : (item.categoryId || null)
+                categoryId: isTransfer ? null : (categoryId || null),
+                payeeId: payeeId || null,
+                useAutoCategory: useAutoCategory,
+                useAutoPayee: useAutoPayee
             };
             
             // Only add encrypted_linkedTransactionId for Transfer type
@@ -146,7 +193,7 @@ export class CSVEngine {
 
     /**
      * Process mappings CSV for import
-     * Format: Description,Category (2 columns)
+     * Format: Description,Category,Payee (3 columns)
      */
     async processMappingsCSV(files) {
         const allCategories = await this.db.getAllCategories();
@@ -178,16 +225,18 @@ export class CSVEngine {
             const hasProperHeaders = 'Description' in firstRow || 'description' in firstRow;
             
             for (const row of rows) {
-                let description, categoryName;
+                let description, categoryName, payeeName;
                 
                 if (hasProperHeaders) {
                     description = (row['Description'] || row['description'] || '').trim();
                     categoryName = (row['Category'] || row['category'] || '').trim();
+                    payeeName = (row['Payee'] || row['payee'] || '').trim();
                 } else {
-                    // Use first two columns by their keys
+                    // Use first three columns by their keys
                     const keys = Object.keys(row);
                     description = (row[keys[0]] || '').trim();
                     categoryName = (row[keys[1]] || '').trim();
+                    payeeName = (row[keys[2]] || '').trim();
                 }
                 
                 if (!description) continue;
@@ -199,11 +248,11 @@ export class CSVEngine {
                 const categoryId = isTransfer ? 'TRANSFER' : (categoryByName[normalizedCategoryName] || null);
                 const isDuplicate = existingDescriptions.has(description.toLowerCase());
                 
-                console.log(`📋 Mapping: "${description}" → "${categoryName}" (ID: ${categoryId}, Duplicate: ${isDuplicate})`);
+                console.log(`📋 Mapping: "${description}" → Category: "${categoryName}" (ID: ${categoryId}), Payee: "${payeeName}", Duplicate: ${isDuplicate}`);
                 
                 processedMappings.push({
                     description,
-                    payee: '',
+                    payee: payeeName,
                     categoryName,
                     categoryId,
                     isDuplicate,
@@ -235,10 +284,13 @@ export class CSVEngine {
                 categoryName = await this.security.decrypt(category.encrypted_name);
             }
             
+            // Handle payee
+            const payeeName = item.payee || '';
+            
             await this.db.setMappingDescription(
                 item.description,
                 await this.security.encrypt(categoryName),
-                await this.security.encrypt('')
+                await this.security.encrypt(payeeName)
             );
             
             imported.push(item.description);

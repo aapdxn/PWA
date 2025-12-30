@@ -124,15 +124,54 @@ export class SummaryUI {
         // Filter transactions by selected period
         const filteredTransactions = await this.filterTransactionsByPeriod(transactions);
         
+        // Get mappings for auto-category resolution
+        const mappings = await this.db.getAllMappingsDescriptions();
+        
         for (const transaction of filteredTransactions) {
-            const amount = Math.abs(parseFloat(await this.security.decrypt(transaction.encrypted_amount)));
-            const category = categories.find(c => c.id === transaction.categoryId);
+            const amount = parseFloat(await this.security.decrypt(transaction.encrypted_amount));
+            const description = transaction.encrypted_description ? await this.security.decrypt(transaction.encrypted_description) : '';
+            
+            // Resolve category (support auto-mapping)
+            let categoryId = transaction.categoryId;
+            let category = categories.find(c => c.id === categoryId);
+            
+            // Handle auto-mapped category
+            if (transaction.useAutoCategory) {
+                const mapping = mappings.find(m => m.description === description);
+                if (mapping && mapping.encrypted_category) {
+                    const categoryName = await this.security.decrypt(mapping.encrypted_category);
+                    if (categoryName === 'Transfer') {
+                        // Skip transfers in summary
+                        continue;
+                    } else {
+                        // Find category by name
+                        for (const cat of categories) {
+                            const name = await this.security.decrypt(cat.encrypted_name);
+                            if (name === categoryName) {
+                                category = cat;
+                                categoryId = cat.id;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
             
             if (!category) continue;
             
             const categoryName = await this.security.decrypt(category.encrypted_name);
             const categoryType = category.type || 'Expense';
-            const categoryBudget = parseFloat(await this.security.decrypt(category.encrypted_limit));
+            
+            // Handle missing or empty budget values
+            let categoryBudget = 0;
+            if (category.encrypted_limit && category.encrypted_limit.length > 16) {
+                try {
+                    categoryBudget = parseFloat(await this.security.decrypt(category.encrypted_limit));
+                } catch (e) {
+                    console.warn(`Failed to decrypt budget for category ${categoryName}:`, e);
+                    categoryBudget = 0;
+                }
+            }
             
             if (!categoryTotals[categoryType]) {
                 categoryTotals[categoryType] = {};
@@ -155,12 +194,55 @@ export class SummaryUI {
                         name,
                         tracked,
                         total: tracked,
-                        budgeted: categoryBudgets[type][name] || 0
+                        budgeted: categoryBudgets[type][name] || 0,
+                        showInChart: true
                     }))
-                    .sort((a, b) => b.tracked - a.tracked);
+                    .sort((a, b) => Math.abs(b.tracked) - Math.abs(a.tracked));
                 
                 summary[type].total = summary[type].categories.reduce((sum, cat) => sum + cat.tracked, 0);
             }
+        }
+        
+        // Handle positive Expense/Saving categories
+        // Move "Venmo" to Income if net positive, exclude other positive categories from chart only
+        for (const type of ['Expense', 'Saving']) {
+            if (!summary[type].categories) continue;
+            
+            const categoriesToMove = [];
+            
+            for (let i = summary[type].categories.length - 1; i >= 0; i--) {
+                const cat = summary[type].categories[i];
+                
+                if (cat.tracked > 0) {
+                    if (cat.name === 'Venmo') {
+                        // Remove from current type and move to Income
+                        summary[type].categories.splice(i, 1);
+                        summary[type].total -= cat.tracked;
+                        
+                        categoriesToMove.push({
+                            name: 'Venmo',
+                            tracked: cat.tracked,
+                            total: cat.tracked,
+                            budgeted: 0,
+                            showInChart: true
+                        });
+                    } else {
+                        // Keep in table but exclude from chart
+                        cat.showInChart = false;
+                    }
+                }
+            }
+            
+            // Add moved categories to Income
+            if (categoriesToMove.length > 0) {
+                summary.Income.categories.push(...categoriesToMove);
+                summary.Income.total += categoriesToMove.reduce((sum, cat) => sum + cat.tracked, 0);
+            }
+        }
+        
+        // Re-sort Income after adding moved categories
+        if (summary.Income.categories && summary.Income.categories.length > 0) {
+            summary.Income.categories.sort((a, b) => Math.abs(b.tracked) - Math.abs(a.tracked));
         }
         
         return summary;
@@ -194,8 +276,8 @@ export class SummaryUI {
                                 <span class="col-remaining">${type === 'Income' ? 'Excess' : 'Remaining'}</span>
                             </div>
                             ${data.categories.map((cat, index) => {
-                                const percentage = cat.budgeted > 0 ? (cat.tracked / cat.budgeted * 100).toFixed(1) : 0;
-                                const diff = type === 'Income' ? (cat.tracked - cat.budgeted) : (cat.budgeted - cat.tracked);
+                                const percentage = cat.budgeted > 0 ? (Math.abs(cat.tracked) / cat.budgeted * 100).toFixed(1) : 0;
+                                const diff = cat.budgeted - cat.tracked;
                                 const statusClass = diff < 0 ? 'negative' : 'positive';
                                 
                                 return `
@@ -204,7 +286,7 @@ export class SummaryUI {
                                             <span class="breakdown-color" style="background: ${colors[index % colors.length]};"></span>
                                             ${cat.name}
                                         </span>
-                                        <span class="col-tracked">$${cat.tracked.toFixed(2)}</span>
+                                        <span class="col-tracked">${cat.tracked >= 0 ? '+' : ''}$${cat.tracked.toFixed(2)}</span>
                                         <span class="col-budgeted">$${cat.budgeted.toFixed(2)}</span>
                                         <span class="col-percent">${percentage}%</span>
                                         <span class="col-remaining ${statusClass}">
@@ -216,13 +298,10 @@ export class SummaryUI {
                             ${data.categories.length > 1 ? `
                                 <div class="details-table-row total-row">
                                     <span class="col-name"><strong>Total</strong></span>
-                                    <span class="col-tracked"><strong>$${data.categories.reduce((sum, cat) => sum + cat.tracked, 0).toFixed(2)}</strong></span>
+                                    <span class="col-tracked"><strong>${data.categories.reduce((sum, cat) => sum + cat.tracked, 0) >= 0 ? '+' : ''}$${data.categories.reduce((sum, cat) => sum + cat.tracked, 0).toFixed(2)}</strong></span>
                                     <span class="col-budgeted"><strong>$${data.categories.reduce((sum, cat) => sum + cat.budgeted, 0).toFixed(2)}</strong></span>
                                     <span class="col-percent"></span>
-                                    <span class="col-remaining"><strong>${type === 'Income' ? '+' : ''}$${(type === 'Income' ? 
-                                        (data.categories.reduce((sum, cat) => sum + cat.tracked, 0) - data.categories.reduce((sum, cat) => sum + cat.budgeted, 0)) :
-                                        (data.categories.reduce((sum, cat) => sum + cat.budgeted, 0) - data.categories.reduce((sum, cat) => sum + cat.tracked, 0))
-                                    ).toFixed(2)}</strong></span>
+                                    <span class="col-remaining"><strong>${(data.categories.reduce((sum, cat) => sum + cat.budgeted, 0) - data.categories.reduce((sum, cat) => sum + cat.tracked, 0)) >= 0 ? '+' : ''}$${(data.categories.reduce((sum, cat) => sum + cat.budgeted, 0) - data.categories.reduce((sum, cat) => sum + cat.tracked, 0)).toFixed(2)}</strong></span>
                                 </div>
                             ` : ''}
                         </div>
@@ -241,7 +320,7 @@ export class SummaryUI {
                             </svg>
                         </div>
                         <div class="chart-legend">
-                            ${data.categories.map((cat, index) => `
+                            ${data.categories.filter(cat => cat.showInChart).map((cat, index) => `
                                 <div class="legend-item">
                                     <span class="legend-color" style="background: ${colors[index % colors.length]};"></span>
                                     <span class="legend-label">${cat.name}</span>
@@ -267,7 +346,14 @@ export class SummaryUI {
             return;
         }
         
-        const total = categories.reduce((sum, cat) => sum + cat.total, 0);
+        // Only show categories marked for chart display and use absolute values for chart
+        const chartCategories = categories.filter(cat => cat.showInChart);
+        if (chartCategories.length === 0) {
+            console.log(`⚠️ Donut chart ${svgId}: No categories to display in chart`);
+            return;
+        }
+        
+        const total = chartCategories.reduce((sum, cat) => sum + Math.abs(cat.total), 0);
         const colors = this.getCategoryColors(svgId.includes('income') ? 'Income' : 
                                              svgId.includes('saving') ? 'Saving' : 'Expense');
         
@@ -276,9 +362,9 @@ export class SummaryUI {
         const radius = 70;
         const thickness = 25;
         
-        console.log(`📊 Rendering donut ${svgId}: ${categories.length} categories`);
+        console.log(`📊 Rendering donut ${svgId}: ${chartCategories.length} categories`);
         
-        if (categories.length === 1) {
+        if (chartCategories.length === 1) {
             console.log(`   Single category - showing full circle`);
             
             const outerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -300,8 +386,8 @@ export class SummaryUI {
         
         let currentAngle = -90;
         
-        categories.forEach((cat, index) => {
-            const percentage = cat.total / total;
+        chartCategories.forEach((cat, index) => {
+            const percentage = Math.abs(cat.total) / total;
             const angle = percentage * 360;
             
             const path = this.createDonutSegment(

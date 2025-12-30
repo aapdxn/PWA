@@ -1,32 +1,23 @@
-/* === RESPONSIVE ADJUSTMENTS === */
-.dashboard-content {
-    overflow-y: auto;
+/* === GLOBAL UTILITIES === */
+.text-center {
+    text-align: center;
 }
 
-@media (max-width: 480px) {
-    .summary-section-fixed {
-        grid-template-columns: repeat(3, 1fr);
-    }
+.text-left {
+    text-align: left;
 }
 
-/* === HOVER & ACTIVE STATES === */
-.transaction-item:hover {
-    background: var(--bg-tertiary);
-    transform: translateX(4px);
+.text-right {
+    text-align: right;
 }
 
-.transaction-item:active {
-    transform: scale(0.98);
-}
+.mt-1 { margin-top: 8px; }
+.mt-2 { margin-top: 16px; }
+.mt-3 { margin-top: 24px; }
 
-.category-card:hover {
-    background: var(--bg-tertiary);
-    transform: translateX(4px);
-}
-
-.category-card:active {
-    transform: scale(0.98);
-}
+.mb-1 { margin-bottom: 8px; }
+.mb-2 { margin-bottom: 16px; }
+.mb-3 { margin-bottom: 24px; }
 
 /* === SCROLLBAR STYLING (Optional - Webkit only) === */
 ::-webkit-scrollbar {

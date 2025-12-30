@@ -9,10 +9,11 @@ export class DatabaseManager {
         
         this.db = new Dexie('VaultBudget');
         
-        this.db.version(7).stores({
+        this.db.version(9).stores({
             settings: 'key',
             categories: '++id, type',
-            transactions: '++id, categoryId, encrypted_linkedTransactionId',
+            payees: '++id',
+            transactions: '++id, categoryId, payeeId, encrypted_linkedTransactionId',
             mappings_accounts: 'account_number',
             mappings_descriptions: 'description',
             category_budgets: '[categoryId+month]'
@@ -49,6 +50,28 @@ export class DatabaseManager {
 
     async deleteCategory(id) {
         await this.db.categories.delete(id);
+    }
+
+    // Payees
+    async getAllPayees() {
+        return await this.db.payees.toArray();
+    }
+
+    async getPayee(id) {
+        return await this.db.payees.get(id);
+    }
+
+    async savePayee(payee) {
+        if (payee.id) {
+            await this.db.payees.update(payee.id, payee);
+            return payee.id;
+        } else {
+            return await this.db.payees.add(payee);
+        }
+    }
+
+    async deletePayee(id) {
+        await this.db.payees.delete(id);
     }
 
     // Transactions
@@ -137,5 +160,13 @@ export class DatabaseManager {
     async clearAllData() {
         await this.db.delete();
         await this.db.open();
+    }
+
+    async clearTransactions() {
+        await this.db.transactions.clear();
+    }
+
+    async clearMappings() {
+        await this.db.mappings_descriptions.clear();
     }
 }

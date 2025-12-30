@@ -91,12 +91,24 @@ class App {
     async onSetupSuccess() {
         console.log('🎉 Setup successful, transitioning to unlocked state');
         this.appState = 'unlocked';
+        
+        // Preload transactions in background for faster tab switching
+        this.ui.preloadTransactions().catch(err => {
+            console.warn('⚠️ Transaction preload failed:', err);
+        });
+        
         this.render();
     }
 
     async onUnlockSuccess() {
         console.log('🎉 Unlock successful, transitioning to unlocked state');
         this.appState = 'unlocked';
+        
+        // Preload transactions in background for faster tab switching
+        this.ui.preloadTransactions().catch(err => {
+            console.warn('⚠️ Transaction preload failed:', err);
+        });
+        
         this.render();
     }
 
@@ -170,4 +182,17 @@ if ('serviceWorker' in navigator) {
         })
         .catch(err => console.error('Service Worker registration failed:', err));
 }
+
+// Optimized Lucide icon loading - only process specific container
+window.loadIcons = function(container) {
+    if (typeof lucide !== 'undefined') {
+        if (container) {
+            // Only process icons in specific container
+            lucide.createIcons({ icons: lucide.icons, nameAttr: 'data-lucide', attrs: {}, container: container });
+        } else {
+            // Fallback to full document scan
+            lucide.createIcons();
+        }
+    }
+};
 

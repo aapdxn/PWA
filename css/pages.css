@@ -65,6 +65,11 @@
     padding: 16px;
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+.transactions-scroll-container.with-toolbar {
+    padding-top: 60px;
 }
 
 .transactions-scroll-container.scroll-disabled {
@@ -102,6 +107,19 @@
     color: var(--text-secondary);
 }
 
+.transaction-date .badge:first-of-type {
+    margin-left: 10px;
+}
+
+.transaction-item:hover {
+    background: var(--bg-tertiary);
+    transform: translateX(4px);
+}
+
+.transaction-item:active {
+    transform: scale(0.98);
+}
+
 /* === BUDGET PAGE === */
 #tab-budget {
     display: flex;
@@ -121,6 +139,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .budget-container {
@@ -167,6 +186,15 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
+}
+
+.category-card:hover {
+    background: var(--bg-tertiary);
+    transform: translateX(4px);
+}
+
+.category-card:active {
+    transform: scale(0.98);
 }
 
 .category-name {
@@ -259,13 +287,14 @@
 
 .search-input-wrapper input {
     width: 100%;
-    padding: 10px 12px;
+    padding: 12px 12px;
     padding-left: 12px;
     margin-left: 32px;
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     color: var(--text-primary);
+    min-height: 44px;
 }
 
 .search-menu-btn {
@@ -485,6 +514,12 @@
     display: none;
 }
 
+@media (max-width: 480px) {
+    .summary-section-fixed {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
 .summary-label {
     font-size: 12px;
     font-weight: 600;
@@ -518,6 +553,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .summary-sections {
@@ -874,11 +910,31 @@
     padding: 16px;
     padding-bottom: calc(100px + env(safe-area-inset-bottom));
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .mappings-scroll-container.scroll-disabled {
     overflow: hidden;
     pointer-events: none;
+}
+
+.mapping-item {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border-left: 3px solid var(--accent-color);
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.mapping-item:hover {
+    background: var(--bg-tertiary);
+    transform: translateX(4px);
+}
+
+.mapping-item:active {
+    transform: scale(0.98);
 }
 
 .mappings-container {

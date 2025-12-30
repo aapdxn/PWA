@@ -9,6 +9,7 @@
     --accent-hover: #5568d3;
     --border-color: #38383a;
     --danger-color: #ff3b30;
+    --warning-color: #ff9500;
     --success-color: #34c759;
     --purple-color: #a855f7;
     --grey-color: #6b7280;
@@ -43,6 +44,25 @@ body {
 /* Prevent zoom on input focus (iOS) */
 input, select, textarea {
     font-size: 16px !important;
+}
+
+/* iOS Touch Optimizations */
+button, a, [role="button"] {
+    -webkit-tap-highlight-color: rgba(102, 126, 234, 0.1);
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+}
+
+input, textarea, select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* Prevent iOS text size adjustment */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 #app {

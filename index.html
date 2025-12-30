@@ -193,6 +193,25 @@
                             
                             <div class="advanced-section">
                                 <h4 class="section-toggle collapsed">
+                                    <span>Filter by Type</span>
+                                    <i data-lucide="chevron-down"></i>
+                                </h4>
+                                <div class="advanced-section-content collapsed">
+                                    <div class="filter-group">
+                                        <div class="filter-select-wrapper">
+                                            <select id="filter-type" multiple size="4">
+                                                <option value="Income">Income</option>
+                                                <option value="Expense">Expense</option>
+                                                <option value="Saving">Saving</option>
+                                                <option value="Transfer">Transfer</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="advanced-section">
+                                <h4 class="section-toggle collapsed">
                                     <span>Filter by Account</span>
                                     <i data-lucide="chevron-down"></i>
                                 </h4>
@@ -276,7 +295,7 @@
                         <button id="category-mappings-back" class="btn-icon">
                             <i data-lucide="arrow-left"></i>
                         </button>
-                        <h2>Category Mappings</h2>
+                        <h2>Description Mappings</h2>
                     </div>
                     <div id="mappings-list"></div>
                 </div>
@@ -392,7 +411,7 @@
                     <input type="date" id="transaction-date" required autocomplete="off">
                 </div>
                 <div class="input-group">
-                    <label for="transaction-amount">Amount *</label>
+                    <label for="transaction-amount">Amount * <span id="transaction-amount-sign" style="color: var(--error); font-weight: 600;"></span></label>
                     <input type="number" id="transaction-amount" step="0.01" required 
                            autocomplete="off" placeholder="0.00">
                 </div>
@@ -400,6 +419,12 @@
                     <label for="transaction-category">Category *</label>
                     <select id="transaction-category" required>
                         <option value="">Select category...</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="transaction-payee">Payee</label>
+                    <select id="transaction-payee">
+                        <option value="">Select or add payee...</option>
                     </select>
                 </div>
                 <div class="input-group" id="transaction-link-group" style="display: none;">

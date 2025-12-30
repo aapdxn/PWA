@@ -1,8 +1,18 @@
 // CSV Mapper - Column mapping and data transformation logic
+import { getFormatMapper } from './csv-formats.js';
+
 export class CSVMapper {
     constructor(security, db) {
         this.security = security;
         this.db = db;
+        this.currentFormat = 'capital-one-checking'; // Default format
+    }
+
+    /**
+     * Set the CSV format to use for mapping
+     */
+    setFormat(formatId) {
+        this.currentFormat = formatId;
     }
 
     /**
@@ -17,50 +27,15 @@ export class CSVMapper {
     }
 
     /**
-     * Map CSV columns to internal transaction format
-     * Handles multiple column name variations
+     * Map CSV columns to internal transaction format using selected format
      */
     mapCSVRow(row) {
         const normalized = this.normalizeRow(row);
-        
-        // Map account number (support multiple column names)
-        const accountNumber = normalized['account number'] || 
-                             normalized['account_number'] || 
-                             normalized['account'] || '';
-        
-        // Map description (support multiple column names)
-        const description = normalized['transaction description'] || 
-                           normalized['description'] || 
-                           normalized['desc'] || '';
-        
-        // Map date (support multiple column names)
-        const date = normalized['transaction date'] || 
-                    normalized['date'] || 
-                    normalized['trans date'] || '';
-        
-        // Map transaction type
-        const transactionType = normalized['transaction type'] || 
-                               normalized['type'] || 
-                               normalized['trans type'] || '';
-        
-        // Map amount and apply sign based on transaction type
-        let amount = parseFloat(normalized['transaction amount'] || 
-                               normalized['amount'] || 
-                               normalized['trans amount'] || '0');
-        
-        // Make negative for debit, positive for credit
-        if (transactionType.toLowerCase().includes('debit')) {
-            amount = -Math.abs(amount);
-        } else if (transactionType.toLowerCase().includes('credit')) {
-            amount = Math.abs(amount);
-        }
+        const mapper = getFormatMapper(this.currentFormat);
+        const mapped = mapper(normalized);
         
         return {
-            accountNumber,
-            description,
-            date,
-            transactionType,
-            amount,
+            ...mapped,
             originalRow: row
         };
     }

@@ -1,8 +1,107 @@
 // ModalManager - Generic modal utilities and category resolution
+import { getFormatList } from '../core/csv-formats.js';
+
 export class ModalManager {
     constructor(security, db) {
         this.security = security;
         this.db = db;
+    }
+
+    /**
+     * Show CSV format selection modal
+     * Returns: formatId (string) or null if cancelled
+     */
+    async showCSVFormatModal() {
+        const formats = getFormatList();
+        
+        return new Promise((resolve) => {
+            const modalHTML = `
+                <div class="modal-overlay" id="csv-format-modal">
+                    <div class="modal-content" style="max-width: 500px;">
+                        <div class="modal-header">
+                            <h2>Select CSV Format</h2>
+                        </div>
+                        <div class="modal-body">
+                            <p style="margin-bottom: 1rem; color: var(--text-secondary);">Choose the format that matches your CSV file:</p>
+                            <div id="csv-format-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                ${formats.map(format => `
+                                    <label class="csv-format-option" style="
+                                        padding: 1rem;
+                                        border: 2px solid var(--border-color);
+                                        border-radius: 8px;
+                                        cursor: pointer;
+                                        transition: all 0.2s;
+                                        display: block;
+                                    ">
+                                        <input type="radio" name="csv-format" value="${format.id}" style="margin-right: 0.5rem;">
+                                        <div style="display: inline-block; vertical-align: top; width: calc(100% - 2rem);">
+                                            <div style="font-weight: 600; margin-bottom: 0.25rem;">${format.name}</div>
+                                            <div style="font-size: 0.75rem; color: var(--text-secondary);">${format.description}</div>
+                                        </div>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn btn-secondary" id="format-cancel">Cancel</button>
+                            <button class="btn btn-primary" id="format-confirm">Continue</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            const modal = document.getElementById('csv-format-modal');
+            
+            // Style radio button labels with hover effect
+            const labels = modal.querySelectorAll('.csv-format-option');
+            labels.forEach(label => {
+                label.addEventListener('mouseenter', () => {
+                    label.style.borderColor = 'var(--primary-color)';
+                    label.style.backgroundColor = 'var(--bg-secondary)';
+                });
+                label.addEventListener('mouseleave', () => {
+                    const radio = label.querySelector('input[type="radio"]');
+                    if (!radio.checked) {
+                        label.style.borderColor = 'var(--border-color)';
+                        label.style.backgroundColor = 'transparent';
+                    }
+                });
+                label.addEventListener('click', () => {
+                    // Remove highlight from all options
+                    labels.forEach(l => {
+                        l.style.borderColor = 'var(--border-color)';
+                        l.style.backgroundColor = 'transparent';
+                    });
+                    // Highlight selected option
+                    label.style.borderColor = 'var(--primary-color)';
+                    label.style.backgroundColor = 'var(--bg-secondary)';
+                });
+            });
+            
+            // Auto-select first option
+            const firstRadio = modal.querySelector('input[type="radio"]');
+            if (firstRadio) {
+                firstRadio.checked = true;
+                firstRadio.closest('.csv-format-option').style.borderColor = 'var(--primary-color)';
+                firstRadio.closest('.csv-format-option').style.backgroundColor = 'var(--bg-secondary)';
+            }
+            
+            document.getElementById('format-cancel').addEventListener('click', () => {
+                modal.remove();
+                resolve(null);
+            });
+            
+            document.getElementById('format-confirm').addEventListener('click', () => {
+                const selected = modal.querySelector('input[name="csv-format"]:checked');
+                if (!selected) {
+                    alert('Please select a CSV format');
+                    return;
+                }
+                modal.remove();
+                resolve(selected.value);
+            });
+        });
     }
 
     /**

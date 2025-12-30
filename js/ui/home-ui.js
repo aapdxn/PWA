@@ -75,6 +75,10 @@ export class HomeUI {
         try {
             // Get all transactions
             const transactions = await this.db.getAllTransactions();
+            
+            // Get categories and mappings for auto-category resolution
+            const categories = await this.db.getAllCategories();
+            const mappings = await this.db.getAllMappingsDescriptions();
 
             // Collect unmapped account numbers
             const accountNumbers = new Set();
@@ -110,7 +114,32 @@ export class HomeUI {
             notifications.uncategorizedCount = 0;
             
             for (const tx of transactions) {
-                if (!tx.categoryId) {
+                let categoryId = tx.categoryId;
+                
+                // Resolve auto-mapped category if applicable
+                if (tx.useAutoCategory && !categoryId) {
+                    const description = tx.encrypted_description 
+                        ? await this.security.decrypt(tx.encrypted_description)
+                        : '';
+                    const mapping = mappings.find(m => m.description === description);
+                    if (mapping && mapping.encrypted_category) {
+                        const categoryName = await this.security.decrypt(mapping.encrypted_category);
+                        if (categoryName === 'Transfer') {
+                            categoryId = null; // Transfer type, but resolved via mapping
+                        } else {
+                            // Find category by decrypting names
+                            for (const cat of categories) {
+                                const name = await this.security.decrypt(cat.encrypted_name);
+                                if (name === categoryName) {
+                                    categoryId = cat.id;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (!categoryId) {
                     // Check if this has the encrypted_linkedTransactionId field
                     if (tx.encrypted_linkedTransactionId !== undefined) {
                         // This is a Transfer - check if it's linked
@@ -121,7 +150,7 @@ export class HomeUI {
                             notifications.unlinkedTransfersCount++;
                         }
                     } else {
-                        // No field means uncategorized
+                        // No field means uncategorized (even after resolving auto-mapping)
                         notifications.uncategorizedCount++;
                     }
                 }
@@ -133,8 +162,6 @@ export class HomeUI {
             
             let totalIncome = 0;
             let totalExpenses = 0;
-            
-            const categories = await this.db.getAllCategories();
             
             for (const tx of transactions) {
                 if (!tx.categoryId) continue;
@@ -194,30 +221,6 @@ export class HomeUI {
                     <div class="notification-content">
                         <div class="notification-title">Unlinked Transfers</div>
                         <div class="notification-description">${notifications.unlinkedTransfersCount} transfer${notifications.unlinkedTransfersCount !== 1 ? 's' : ''} need${notifications.unlinkedTransfersCount === 1 ? 's' : ''} to be linked</div>
-                    </div>
-                </div>
-            `);
-        }
-        
-        if (notifications.uncategorizedCount > 0) {
-            items.push(`
-                <div class="notification-item">
-                    <i data-lucide="tag" class="notification-icon"></i>
-                    <div class="notification-content">
-                        <div class="notification-title">Uncategorized Transactions</div>
-                        <div class="notification-description">${notifications.uncategorizedCount} transaction${notifications.uncategorizedCount !== 1 ? 's' : ''} need${notifications.uncategorizedCount === 1 ? 's' : ''} a category</div>
-                    </div>
-                </div>
-            `);
-        }
-        
-        if (notifications.uncategorizedCount > 0) {
-            items.push(`
-                <div class="notification-item">
-                    <i data-lucide="tag" class="notification-icon"></i>
-                    <div class="notification-content">
-                        <div class="notification-title">Uncategorized Transactions</div>
-                        <div class="notification-description">${notifications.uncategorizedCount} transaction${notifications.uncategorizedCount !== 1 ? 's' : ''} need${notifications.uncategorizedCount === 1 ? 's' : ''} a category</div>
                     </div>
                 </div>
             `);

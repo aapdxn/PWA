@@ -109,13 +109,18 @@
 ```javascript
 // Settings: { key, value }
 // Categories: { id, encrypted_name, encrypted_limit, type }
+// Payees: { id, encrypted_name }
 // Transactions: { id, encrypted_date, encrypted_amount, encrypted_description, 
-//                 encrypted_account, categoryId, encrypted_note }
+//                 encrypted_account, categoryId, payeeId, encrypted_note,
+//                 encrypted_linkedTransactionId, useAutoCategory, useAutoPayee }
 // Mappings (accounts): { account_number, encrypted_name }
 // Mappings (descriptions): { description, encrypted_category, encrypted_payee }
 ```
 
-**Relational Logic:** `categoryId` links transactions to categories  
+**Relational Logic:** 
+- `categoryId` links transactions to categories
+- `payeeId` links transactions to payees
+- `useAutoCategory` and `useAutoPayee` enable dynamic mapping resolution
 **Version Management:** Increment `db.version()` when adding tables/indexes
 
 ---
@@ -156,7 +161,9 @@ location.reload();
 
 ---
 
-**Last Updated:** 2025-12-23 (Major Refactor v2.24.0)  
-**Cache Version:** v2.24.0  
+**Last Updated:** 2025-12-30 (CSS Optimization v2.48.0)  
+**Cache Version:** v2.48.0  
+**Database Version:** 9  
 **Line Count Reduction:** 4,900+ lines removed (60% reduction)  
+**CSS Status:** Optimized for iOS with consistent design system  
 **Documentation:** See `/docs` folder for detailed guides

@@ -1,10 +1,45 @@
 /**
- * Budget Category Form - Handles category CRUD modals and operations
+ * BudgetCategoryForm - Category CRUD Modal Handler
  * 
- * @module BudgetCategoryForm
+ * RESPONSIBILITIES:
+ * - Render and manage category creation/edit modals
+ * - Handle category save, update, and delete operations
+ * - Manage monthly budget overrides (quick-edit)
+ * - Handle "Copy from Month" functionality
+ * - Validate form inputs before saving
+ * 
+ * FORM MODES:
+ * - Create Mode: All fields editable (name, type, limit)
+ * - Edit Mode: Name/type read-only, limit editable for current month
+ * 
+ * VALIDATION RULES:
+ * - Category name: Required, non-empty
+ * - Budget limit: Required, must be valid positive number
+ * - Category type: Income, Expense, Saving, or Transfer
+ * - Delete: Prevented if category has assigned transactions
+ * 
+ * CATEGORY TYPES:
+ * - Income: Positive amounts, increases available budget
+ * - Expense: Negative amounts, decreases available budget
+ * - Saving: Negative amounts, treated like expense
+ * - Transfer: No budget tracking, excluded from calculations
+ * 
+ * STATE REQUIREMENTS:
+ * - Requires Unlocked state for all decrypt operations
+ * 
+ * @class BudgetCategoryForm
+ * @module UI/Budget
+ * @layer 5 - UI Components
  */
 
 export class BudgetCategoryForm {
+    /**
+     * Initialize category form manager with dependency injection
+     * 
+     * @param {SecurityManager} security - Web Crypto API wrapper for encryption/decryption
+     * @param {DatabaseManager} db - Dexie database wrapper for CRUD operations
+     * @param {BudgetMonthManager} monthManager - Month navigation manager for current month context
+     */
     constructor(security, db, monthManager) {
         this.security = security;
         this.db = db;
@@ -15,7 +50,21 @@ export class BudgetCategoryForm {
     }
 
     /**
-     * Open category modal for editing or creating
+     * Open category modal in create or edit mode
+     * 
+     * CREATE MODE (categoryId = null):
+     * - All fields enabled and editable
+     * - Delete button hidden
+     * - Save creates new category + sets monthly budget
+     * 
+     * EDIT MODE (categoryId provided):
+     * - Name and type fields are read-only (immutable)
+     * - Budget limit editable for current month only
+     * - Delete button visible if no transactions assigned
+     * - Save updates monthly budget (not default limit)
+     * 
+     * @param {number|null} [categoryId=null] - Category ID to edit, or null to create new
+     * @returns {Promise<void>}
      */
     async openCategoryModal(categoryId = null) {
         console.log('📝 Opening category modal, ID:', categoryId);
@@ -43,7 +92,20 @@ export class BudgetCategoryForm {
     }
 
     /**
-     * Populate form for editing existing category
+     * Populate form fields for editing existing category
+     * 
+     * IMPORTANT: Loads monthly budget for current month, NOT default limit
+     * This allows per-month budget customization while preserving category definition.
+     * 
+     * FIELD STATES:
+     * - Name: Read-only (cannot change category name after creation)
+     * - Type: Disabled (cannot change Income/Expense type after creation)
+     * - Limit: Editable (sets monthly budget for current month)
+     * 
+     * @private
+     * @param {number} categoryId - Category ID to load data for
+     * @param {HTMLFormElement} form - Form element to populate
+     * @returns {Promise<void>}
      */
     async _populateEditForm(categoryId, form) {
         const category = await this.db.getCategory(categoryId);
@@ -53,6 +115,7 @@ export class BudgetCategoryForm {
             return;
         }
         
+        // STATE GUARD: Decrypt requires unlocked state
         const name = await this.security.decrypt(category.encrypted_name);
         
         // Get monthly budget for current month, not default limit
@@ -98,7 +161,13 @@ export class BudgetCategoryForm {
     }
 
     /**
-     * Reset form for creating new category
+     * Reset form to default state for creating new category
+     * 
+     * Clears all fields, removes edit ID, enables all inputs,
+     * and hides delete button.
+     * 
+     * @private
+     * @param {HTMLFormElement} form - Form element to reset
      */
     _resetFormForCreate(form) {
         document.getElementById('category-modal-title').textContent = 'Add Category';
@@ -126,7 +195,25 @@ export class BudgetCategoryForm {
     }
 
     /**
-     * Save category (create or update)
+     * Save category (create new or update monthly budget)
+     * 
+     * CREATE MODE:
+     * 1. Validates all fields (name, limit, type)
+     * 2. Encrypts and saves new category with default limit
+     * 3. Sets monthly budget for current month
+     * 4. Triggers onCategoryChanged callback
+     * 
+     * EDIT MODE:
+     * 1. Validates budget limit only
+     * 2. Updates monthly budget for current month
+     * 3. Does NOT modify category name or type (immutable)
+     * 4. Triggers onCategoryChanged callback
+     * 
+     * VALIDATION:
+     * - Name must be non-empty (create only)
+     * - Limit must be valid number ≥ 0
+     * 
+     * @returns {Promise<void>}
      */
     async saveCategory() {
         console.log('💾 Saving category/budget...');
@@ -178,7 +265,20 @@ export class BudgetCategoryForm {
     }
 
     /**
-     * Delete category
+     * Delete category after validation and confirmation
+     * 
+     * VALIDATION:
+     * - Prevents deletion if category has assigned transactions
+     * - User must reassign or delete transactions first
+     * - Requires user confirmation via confirm() dialog
+     * 
+     * ON SUCCESS:
+     * - Deletes category from database
+     * - Closes modal
+     * - Triggers onCategoryChanged callback to refresh UI
+     * 
+     * @param {number} categoryId - Category ID to delete
+     * @returns {Promise<void>}
      */
     async deleteCategory(categoryId) {
         console.log('🗑️ Deleting category:', categoryId);
@@ -210,7 +310,24 @@ export class BudgetCategoryForm {
     }
 
     /**
-     * Set monthly budget for a category (quick edit)
+     * Quick-edit monthly budget for a category
+     * 
+     * Shows prompt to set custom budget override for current month.
+     * Allows resetting to default by clearing the value.
+     * 
+     * BEHAVIOR:
+     * - If user enters amount: Sets monthly budget override
+     * - If user clears value: Removes override, uses default limit
+     * - If user cancels: No changes made
+     * 
+     * MONTHLY BUDGETS:
+     * - Stored separately from default category limit
+     * - Allows per-month customization without changing category definition
+     * - Indicated by underline in UI
+     * 
+     * @param {number} categoryId - Category to set budget for
+     * @param {number} currentLimit - Current budget amount to display in prompt
+     * @returns {Promise<void>}
      */
     async setMonthlyBudget(categoryId, currentLimit) {
         const category = await this.db.getCategory(categoryId);
@@ -249,7 +366,23 @@ export class BudgetCategoryForm {
     }
 
     /**
-     * Show copy from month modal
+     * Show modal to copy all budgets from another month
+     * 
+     * Allows bulk copying of all monthly budget overrides from
+     * a source month to the current month. Useful for establishing
+     * budgets based on previous months.
+     * 
+     * PROCESS:
+     * 1. User selects source year and month
+     * 2. Fetches all category_budgets for source month
+     * 3. Copies each budget to current month
+     * 4. Refreshes UI to show new budgets
+     * 
+     * VALIDATION:
+     * - Prevents copying from same month
+     * - Shows alert if source month has no budgets
+     * 
+     * @returns {Promise<void>}
      */
     async showCopyFromMonthModal() {
         const now = new Date();
@@ -369,7 +502,9 @@ export class BudgetCategoryForm {
     }
 
     /**
-     * Close category modal
+     * Close category modal and cleanup
+     * 
+     * @private
      */
     _closeModal() {
         document.getElementById('category-modal').classList.add('hidden');

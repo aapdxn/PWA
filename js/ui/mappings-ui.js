@@ -1,8 +1,28 @@
 /**
- * Mappings UI - Coordinator for mappings functionality
- * Delegates to specialized modules for rendering, forms, and import
+ * MappingsUI - Mappings Management Coordinator
  * 
- * @module MappingsUI
+ * WORKFLOW:
+ * 1. Display all description mappings in searchable/filterable list
+ * 2. User can add/edit/delete mappings manually
+ * 3. User can import mappings from CSV file
+ * 4. Auto-categorization uses mappings for future CSV imports
+ * 
+ * RESPONSIBILITIES:
+ * - Coordinate mappings functionality across modules
+ * - Delegate rendering to MappingsRenderer
+ * - Delegate form handling to MappingsForm
+ * - Delegate CSV import to MappingsImportHandler
+ * - Manage callbacks between modules
+ * - Expose public API for parent UI Manager
+ * 
+ * MODULE COMPOSITION:
+ * - MappingsRenderer: Display and filtering logic
+ * - MappingsForm: Modal for creating/editing mappings
+ * - MappingsImportHandler: CSV import and review
+ * 
+ * @class MappingsUI
+ * @module UI/Mappings
+ * @layer 5 - UI Components
  */
 
 import { MappingsRenderer } from './mappings-renderer.js';
@@ -10,6 +30,15 @@ import { MappingsForm } from './mappings-form.js';
 import { MappingsImportHandler } from './mappings-import-handler.js';
 
 export class MappingsUI {
+    /**
+     * Initialize mappings UI coordinator
+     * Creates specialized modules and sets up inter-module callbacks
+     * 
+     * @param {SecurityManager} security - Web Crypto API wrapper for encryption
+     * @param {DatabaseManager} db - Dexie database interface
+     * @param {CSVEngine} csvEngine - CSV processing for mappings import
+     * @param {ModalManager} modalManager - For category resolution modals
+     */
     constructor(security, db, csvEngine, modalManager) {
         this.security = security;
         this.db = db;
@@ -35,7 +64,10 @@ export class MappingsUI {
     }
 
     /**
-     * Render mappings tab (delegates to MappingsRenderer)
+     * Render mappings tab
+     * Delegates to MappingsRenderer and initializes CSV import file input
+     * 
+     * @returns {Promise<void>}
      */
     async renderMappingsTab() {
         await this.renderer.renderMappingsTab();
@@ -43,21 +75,32 @@ export class MappingsUI {
     }
 
     /**
-     * Toggle FAB menu (delegates to MappingsForm)
+     * Toggle FAB menu
+     * Delegates to MappingsForm for menu display control
+     * 
+     * @returns {void}
      */
     toggleMappingFabMenu() {
         this.form.toggleMappingFabMenu();
     }
 
     /**
-     * Open mapping for edit (delegates to MappingsForm)
+     * Open mapping for edit
+     * Delegates to MappingsForm to show edit modal with pre-filled data
+     * 
+     * @param {string} description - Description key to edit
+     * @returns {Promise<void>}
      */
     async openMappingForEdit(description) {
         await this.form.openMappingForEdit(description);
     }
 
     /**
-     * Show manual mapping modal (delegates to MappingsForm)
+     * Show manual mapping modal
+     * Delegates to MappingsForm for add/edit modal display
+     * 
+     * @param {Object|null} mapping - Existing mapping data for edit mode, null for add mode
+     * @returns {Promise<void>}
      */
     async showManualMappingModal(mapping = null) {
         await this.form.showManualMappingModal(mapping);

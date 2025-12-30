@@ -1,10 +1,74 @@
-// SettingsUI - Handles settings tab rendering
+/**
+ * SettingsUI - Application settings and data management interface
+ * 
+ * RESPONSIBILITIES:
+ * - Render settings tab with navigation buttons
+ * - Manage data clearing operations (transactions, mappings, all data)
+ * - Handle transfer unlinking functionality
+ * - Navigate to account mappings and description mappings pages
+ * - Provide multi-step confirmation flows for destructive actions
+ * - Execute complete data reset with reload
+ * 
+ * STATE REQUIREMENTS:
+ * - Unlocked state (requires access to encrypted data)
+ * - Database access for clearing operations
+ * - Security manager for key clearing on reset
+ * 
+ * NAVIGATION:
+ * - Account Mappings: Show account-mappings-page, hide tabs/nav
+ * - Description Mappings: Show tab-mappings, hide tabs/nav
+ * - Uses custom events to trigger page-specific renders
+ * 
+ * DANGER ZONE OPERATIONS:
+ * - Unlink All Transfers: Remove linkedTransactionId from all transactions
+ * - Clear Transactions: Delete all transaction records (preserve categories/budgets/mappings)
+ * - Clear Mappings: Delete all description mappings (preserve transactions/categories)
+ * - Reset All Data: Nuclear option - delete everything and reload
+ * 
+ * CONFIRMATION WORKFLOW:
+ * - Reset Data: Two-step modal confirmation (warning → final confirmation)
+ * - Clear Operations: Single confirmation modal
+ * - All confirmations use danger/warning color coding
+ * 
+ * @class SettingsUI
+ * @module UI/Settings
+ * @layer 5 - UI Components
+ */
 export class SettingsUI {
+    /**
+     * Initialize settings UI component
+     * 
+     * @param {SecurityManager} security - Encryption/decryption and key management
+     * @param {DatabaseManager} db - IndexedDB interface via Dexie
+     */
     constructor(security, db) {
         this.security = security;
         this.db = db;
     }
 
+    /**
+     * Render settings tab with navigation buttons and danger zone
+     * 
+     * SECTIONS:
+     * 1. Data Management:
+     *    - Account Name Mappings (navigates to account-mappings-page)
+     *    - Description Mappings (navigates to tab-mappings)
+     * 2. Danger Zone:
+     *    - Unlink All Transfers (warning color)
+     *    - Clear All Transactions (warning color)
+     *    - Clear Description Mappings (warning color)
+     *    - Reset All Data (danger color)
+     * 
+     * BUTTON STRUCTURE:
+     * - Left icon (action type)
+     * - Center text (action name)
+     * - Right icon (chevron for navigation, alert for danger)
+     * 
+     * EVENT LISTENERS:
+     * - Attached via attachSettingsEventListeners() after DOM insertion
+     * 
+     * @returns {void}
+     */
     renderSettingsTab() {
         console.log('⚙️ Rendering settings tab');
         const container = document.getElementById('settings-content');
@@ -63,6 +127,19 @@ export class SettingsUI {
         }
     }
 
+    /**
+     * Attach click event listeners to all settings buttons
+     * 
+     * ATTACHED LISTENERS:
+     * - btn-account-mappings: Navigate to account mappings page
+     * - btn-category-mappings: Navigate to description mappings page
+     * - btn-unlink-transfers: Show unlink confirmation dialog
+     * - btn-clear-transactions: Show clear transactions warning
+     * - btn-clear-mappings: Show clear mappings warning
+     * - btn-reset-data: Show reset data warning (first of two-step confirmation)
+     * 
+     * @returns {void}
+     */
     attachSettingsEventListeners() {
         const accountMappingsBtn = document.getElementById('btn-account-mappings');
         if (accountMappingsBtn) {
@@ -107,6 +184,25 @@ export class SettingsUI {
         }
     }
 
+    /**
+     * Show first warning modal for reset data operation
+     * 
+     * MODAL CONTENT:
+     * - Red alert icon and title
+     * - Bulleted list of data to be deleted:
+     *   - All transactions
+     *   - All categories and budgets
+     *   - All mappings
+     *   - Master password
+     *   - All settings
+     * - Warning: "This action cannot be undone."
+     * 
+     * ACTIONS:
+     * - Cancel: Close modal
+     * - I Understand: Proceed to showResetDataConfirmation (second confirmation)
+     * 
+     * @returns {void}
+     */
     showResetDataWarning() {
         const modalHTML = `
             <div class="modal-overlay" id="reset-warning-modal">
@@ -159,6 +255,23 @@ export class SettingsUI {
         });
     }
 
+    /**
+     * Show confirmation dialog for unlinking all transfer transactions
+     * 
+     * WORKFLOW:
+     * - Count transactions with encrypted_linkedTransactionId
+     * - Display count in confirmation dialog
+     * - If no linked transfers, show alert and exit
+     * - On confirmation, call unlinkAllTransfers()
+     * 
+     * TRANSFER LINKING:
+     * - Linked transfers have encrypted_linkedTransactionId pointing to paired transaction
+     * - Unlinking removes connection but preserves both transactions
+     * - Used to break transfer pairs (e.g., after importing duplicates)
+     * 
+     * @async
+     * @returns {Promise<void>}
+     */
     async showUnlinkTransfersWarning() {
         const allTransactions = await this.db.getAllTransactions();
         const linkedCount = allTransactions.filter(t => t.encrypted_linkedTransactionId).length;
@@ -175,6 +288,23 @@ export class SettingsUI {
         }
     }
 
+    /**
+     * Remove all transfer links from transactions
+     * 
+     * OPERATION:
+     * - Iterate through all transactions
+     * - Set encrypted_linkedTransactionId to null for linked transactions
+     * - Save each modified transaction back to database
+     * - Count and report number of unlinked transactions
+     * 
+     * POST-OPERATION:
+     * - Display success alert with count
+     * - Trigger transaction tab refresh if UIManager available
+     * 
+     * @async
+     * @returns {Promise<void>}
+     * @throws {Error} If database operation fails
+     */
     async unlinkAllTransfers() {
         try {
             const allTransactions = await this.db.getAllTransactions();
@@ -200,6 +330,24 @@ export class SettingsUI {
         }
     }
 
+    /**
+     * Show second (final) confirmation modal for reset data operation
+     * 
+     * MODAL CONTENT:
+     * - Title: "Are You Sure?"
+     * - Message: Final warning about permanent deletion
+     * - "This is your last chance to cancel."
+     * 
+     * ACTIONS:
+     * - Cancel: Close modal and abort operation
+     * - Delete All Data (danger color): Execute resetAllData()
+     * 
+     * WORKFLOW:
+     * - Called from showResetDataWarning after user acknowledges first warning
+     * - Final checkpoint before irreversible data deletion
+     * 
+     * @returns {void}
+     */
     showResetDataConfirmation() {
         const modalHTML = `
             <div class="modal-overlay" id="reset-confirm-modal">
@@ -238,6 +386,31 @@ export class SettingsUI {
         });
     }
 
+    /**
+     * Execute complete data reset and reload application
+     * 
+     * OPERATION STEPS:
+     * 1. Display loading overlay ("Deleting all data...")
+     * 2. Call db.clearAllData() to wipe IndexedDB
+     * 3. Clear encryption keys from SecurityManager memory
+     * 4. Reload page (returns user to setup screen)
+     * 
+     * DATA DELETED:
+     * - All transactions
+     * - All categories and budgets
+     * - All mappings (account and description)
+     * - Master password hash
+     * - All settings
+     * 
+     * POST-RESET STATE:
+     * - User returned to initial setup screen
+     * - Must create new master password
+     * - Fresh IndexedDB with no data
+     * 
+     * @async
+     * @returns {Promise<void>}
+     * @throws {Error} Shows alert if reset fails (with manual clearing instructions)
+     */
     async resetAllData() {
         try {
             // Show loading indicator
@@ -266,6 +439,22 @@ export class SettingsUI {
         }
     }
 
+    /**
+     * Navigate to account mappings page (hide tabs, show dedicated page)
+     * 
+     * NAVIGATION WORKFLOW:
+     * 1. Hide all .tab-content elements
+     * 2. Show #account-mappings-page
+     * 3. Hide bottom navigation bar
+     * 4. Hide all FABs (floating action buttons)
+     * 5. Dispatch 'show-account-mappings' custom event
+     * 
+     * EVENT HANDLING:
+     * - UIManager listens for 'show-account-mappings' event
+     * - Triggers AccountMappingsUI.renderAccountMappingsPage()
+     * 
+     * @returns {void}
+     */
     navigateToAccountMappings() {
         // Hide all tabs
         document.querySelectorAll('.tab-content').forEach(tab => {
@@ -288,6 +477,23 @@ export class SettingsUI {
         window.dispatchEvent(new CustomEvent('show-account-mappings'));
     }
 
+    /**
+     * Navigate to description mappings page (hide tabs, show mappings tab)
+     * 
+     * NAVIGATION WORKFLOW:
+     * 1. Hide all .tab-content elements
+     * 2. Show #tab-mappings
+     * 3. Hide bottom navigation bar
+     * 4. Hide all FABs
+     * 5. Show #fab-add-mapping (dedicated FAB for adding mappings)
+     * 6. Dispatch 'show-category-mappings' custom event
+     * 
+     * EVENT HANDLING:
+     * - UIManager listens for 'show-category-mappings' event
+     * - Triggers MappingsUI.renderMappingsTab()
+     * 
+     * @returns {void}
+     */
     navigateToCategoryMappings() {
         // Hide all tabs
         document.querySelectorAll('.tab-content').forEach(tab => {
@@ -314,6 +520,26 @@ export class SettingsUI {
         window.dispatchEvent(new CustomEvent('show-category-mappings'));
     }
 
+    /**
+     * Show confirmation modal for clearing all transactions
+     * 
+     * MODAL CONTENT:
+     * - Warning icon and title (warning color)
+     * - Description: "Permanently delete all transaction records"
+     * - Note: "Your categories, budgets, and mappings will be preserved."
+     * - Warning: "This action cannot be undone."
+     * 
+     * ACTIONS:
+     * - Cancel: Close modal
+     * - Clear Transactions (warning color): Execute clearTransactionsData()
+     * 
+     * DATA PRESERVED:
+     * - All categories and budgets
+     * - All mappings (account and description)
+     * - Master password and settings
+     * 
+     * @returns {void}
+     */
     showClearTransactionsWarning() {
         const modalHTML = `
             <div class="modal-overlay" id="clear-transactions-modal">
@@ -360,6 +586,27 @@ export class SettingsUI {
         });
     }
 
+    /**
+     * Show confirmation modal for clearing all description mappings
+     * 
+     * MODAL CONTENT:
+     * - Warning icon and title (warning color)
+     * - Description: "Permanently delete all description mapping rules"
+     * - Note: "Your transactions, categories, and budgets will be preserved."
+     * - Warning: "This action cannot be undone."
+     * 
+     * ACTIONS:
+     * - Cancel: Close modal
+     * - Clear Mappings (warning color): Execute clearMappingsData()
+     * 
+     * DATA PRESERVED:
+     * - All transactions
+     * - All categories and budgets
+     * - Account mappings
+     * - Master password and settings
+     * 
+     * @returns {void}
+     */
     showClearMappingsWarning() {
         const modalHTML = `
             <div class="modal-overlay" id="clear-mappings-modal">
@@ -406,6 +653,28 @@ export class SettingsUI {
         });
     }
 
+    /**
+     * Execute transaction clearing operation
+     * 
+     * OPERATION STEPS:
+     * 1. Display loading overlay ("Clearing transactions...")
+     * 2. Call db.clearTransactions() to delete all transaction records
+     * 3. Remove loading overlay
+     * 4. Show success alert
+     * 5. Dispatch 'data-updated' custom event to refresh UI
+     * 
+     * DATABASE OPERATION:
+     * - Deletes all records from 'transactions' table
+     * - Preserves all other tables (categories, payees, mappings, settings)
+     * 
+     * ERROR HANDLING:
+     * - Catches errors and shows alert with error message
+     * - Removes loading overlay on error
+     * 
+     * @async
+     * @returns {Promise<void>}
+     * @throws {Error} If database clear operation fails
+     */
     async clearTransactionsData() {
         try {
             const loadingHTML = `
@@ -434,6 +703,33 @@ export class SettingsUI {
         }
     }
 
+    /**
+     * Execute description mappings clearing operation
+     * 
+     * OPERATION STEPS:
+     * 1. Display loading overlay ("Clearing description mappings...")
+     * 2. Call db.clearMappings() to delete all mapping records
+     * 3. Remove loading overlay
+     * 4. Show success alert
+     * 5. Dispatch 'data-updated' custom event to refresh UI
+     * 
+     * DATABASE OPERATION:
+     * - Deletes all records from 'mappings_descriptions' table
+     * - Preserves account mappings, transactions, categories, settings
+     * 
+     * IMPACT:
+     * - Existing transactions with useAutoCategory/useAutoPayee lose mappings
+     * - Auto-mapped transactions will show as unmapped until new mappings created
+     * - Manually-set categories/payees on transactions are unaffected
+     * 
+     * ERROR HANDLING:
+     * - Catches errors and shows alert with error message
+     * - Removes loading overlay on error
+     * 
+     * @async
+     * @returns {Promise<void>}
+     * @throws {Error} If database clear operation fails
+     */
     async clearMappingsData() {
         try {
             const loadingHTML = `

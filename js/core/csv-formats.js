@@ -1,6 +1,41 @@
-// CSV Format Definitions
-// Defines mapping configurations for different CSV formats
+/**
+ * CSVFormats - CSV Format Definitions and Mappers
+ * 
+ * Defines mapping configurations for different bank CSV export formats.
+ * Each format includes a mapper function that transforms bank-specific
+ * column names and data structures into the application's standardized
+ * transaction format.
+ * 
+ * SUPPORTED FORMATS:
+ * - capital-one-checking: Capital One Checking/Savings accounts
+ * - capital-one-credit: Capital One Credit Card accounts
+ * 
+ * Each mapper handles:
+ * - Column name variations (flexible matching)
+ * - Amount sign normalization (debit=negative, credit=positive)
+ * - Data type conversions
+ * 
+ * @module Core/CSVFormats
+ * @layer 3 - Core Services
+ */
 
+/**
+ * CSV format definitions with mapper functions
+ * 
+ * Each format object contains:
+ * @property {string} name - Human-readable format name
+ * @property {string} description - CSV column structure description
+ * @property {Function} mapper - Mapper function (normalizedRow) => transaction
+ * 
+ * Mapper function signature:
+ * @param {Object} normalizedRow - Row with lowercase, trimmed keys
+ * @returns {Object} Standardized transaction object
+ * @returns {string} return.accountNumber - Account identifier
+ * @returns {string} return.description - Transaction description
+ * @returns {string} return.date - Transaction date
+ * @returns {string} return.transactionType - Transaction type (Debit/Credit)
+ * @returns {number} return.amount - Signed amount (negative for debits)
+ */
 export const CSV_FORMATS = {
     'capital-one-checking': {
         name: 'Capital One Checking/Savings',
@@ -85,6 +120,20 @@ export const CSV_FORMATS = {
     }
 };
 
+/**
+ * Get list of all available CSV formats
+ * 
+ * Returns an array of format metadata for UI display and selection.
+ * 
+ * @returns {Array<Object>} Array of format objects
+ * @returns {string} return[].id - Format identifier
+ * @returns {string} return[].name - Human-readable name
+ * @returns {string} return[].description - Column structure description
+ * 
+ * @example
+ * const formats = getFormatList();
+ * // [{ id: 'capital-one-checking', name: 'Capital One Checking/Savings', ... }]
+ */
 export function getFormatList() {
     return Object.keys(CSV_FORMATS).map(key => ({
         id: key,
@@ -93,6 +142,20 @@ export function getFormatList() {
     }));
 }
 
+/**
+ * Get mapper function for a specific CSV format
+ * 
+ * Retrieves the mapper function for transforming CSV rows from the
+ * specified format into standardized transaction objects.
+ * 
+ * @param {string} formatId - Format identifier (e.g., 'capital-one-checking')
+ * @returns {Function} Mapper function for the specified format
+ * @throws {Error} If formatId is not recognized
+ * 
+ * @example
+ * const mapper = getFormatMapper('capital-one-checking');
+ * const transaction = mapper(normalizedRow);
+ */
 export function getFormatMapper(formatId) {
     const format = CSV_FORMATS[formatId];
     if (!format) {

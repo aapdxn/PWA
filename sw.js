@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2.48.0'; // CSS Optimization: iOS touch, duplicates removed, consistency fixes - Dec 30 2025
+const CACHE_VERSION = 'v2.49.0'; // AI Productivity Optimization: JSDoc, docs, state guards, automation scripts - Dec 30 2025
 const CACHE_NAME = `vault-budget-${CACHE_VERSION}`;
 
 // Cache only local files that exist

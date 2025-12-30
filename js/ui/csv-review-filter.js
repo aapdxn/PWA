@@ -1,12 +1,38 @@
 /**
- * CSV Review Filter - Handles filtering, sorting, and search logic for CSV review
+ * CSVReviewFilter - CSV Import Review Filter & Sort Engine
  * 
- * @module CSVReviewFilter
+ * RESPONSIBILITIES:
+ * - Apply search/filter criteria to CSV review items
+ * - Sort transactions by date, amount, description, or account
+ * - Manage quick filters (duplicates, unmapped, auto-mapped)
+ * - Apply advanced filters (amount range, date range)
+ * - Update visible item count
+ * - Initialize custom select dropdowns for categories
+ * - Bulk skip operations
+ * 
+ * FILTER TYPES:
+ * - Search: Text match on description/account
+ * - Quick Filters:
+ *   - Hide Duplicates: Filter out duplicate transactions
+ *   - Show Only Unmapped: Only transactions without category suggestions
+ *   - Show Only Auto: Only auto-mapped transactions
+ * - Advanced Filters:
+ *   - Amount Range: Min/max absolute value filtering
+ *   - Date Range: Start/end date filtering
+ * - Sorting: Date, Amount, Description, Account (asc/desc)
+ * 
+ * @class CSVReviewFilter
+ * @module UI/CSV
+ * @layer 5 - UI Components
  */
 
 import { CustomSelect } from './custom-select.js';
 
 export class CSVReviewFilter {
+    /**
+     * Initialize CSV review filter manager
+     * Sets up default filter state and custom select tracking
+     */
     constructor() {
         // Search/Filter state
         this.csvSearchQuery = '';
@@ -20,6 +46,18 @@ export class CSVReviewFilter {
 
     /**
      * Apply filters and sorting to CSV review items
+     * Evaluates all filter criteria, sorts visible items, and updates display
+     * 
+     * FILTER PRECEDENCE:
+     * 1. Search query (description/account text match)
+     * 2. Quick filters (duplicates, unmapped, auto)
+     * 3. Amount range filters
+     * 4. Date range filters
+     * 5. Sorting (date, amount, description, account)
+     * 
+     * @param {HTMLElement} modal - CSV review page container
+     * @param {Array<Object>} processedData - Transaction data for filter evaluation
+     * @returns {void}
      */
     applyFiltersAndSort(modal, processedData) {
         const searchQuery = this.csvSearchQuery.toLowerCase();
@@ -138,6 +176,9 @@ export class CSVReviewFilter {
 
     /**
      * Clear all filters and reset to default state
+     * Resets search, quick filters, advanced filters, and sorting to defaults
+     * 
+     * @returns {void}
      */
     clearAllFilters() {
         this.csvSearchQuery = '';
@@ -159,6 +200,9 @@ export class CSVReviewFilter {
 
     /**
      * Initialize custom selects for category dropdowns
+     * Destroys existing instances and creates new CustomSelect for all visible dropdowns
+     * 
+     * @returns {void}
      */
     initializeCustomSelects() {
         // Destroy existing custom selects
@@ -182,6 +226,12 @@ export class CSVReviewFilter {
 
     /**
      * Skip all visible CSV items
+     * Checks skip checkbox for all currently visible (not filtered out) items
+     * Shows temporary success feedback on button
+     * 
+     * @param {HTMLElement} modal - CSV review page container
+     * @param {Array<Object>} processedData - Transaction data to mark as skipped
+     * @returns {void}
      */
     skipAllVisibleItems(modal, processedData) {
         let skippedCount = 0;
@@ -211,6 +261,9 @@ export class CSVReviewFilter {
 
     /**
      * Reset filter state
+     * Clears all filter flags (called when closing CSV review page)
+     * 
+     * @returns {void}
      */
     resetState() {
         this.csvSearchQuery = '';

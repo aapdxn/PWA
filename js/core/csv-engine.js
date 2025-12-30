@@ -1,9 +1,33 @@
-// CSVEngine - Main CSV processing coordinator
-// Uses global Papa (PapaParse loaded via CDN)
+/**
+ * CSVEngine - Main CSV processing coordinator
+ * 
+ * Orchestrates CSV import/export operations:
+ * - File parsing (PapaParse)
+ * - Column mapping (CSVMapper)
+ * - Duplicate detection (CSVValidator)
+ * - Transaction import coordination
+ * - CSV export generation
+ * 
+ * DEPENDENCIES:
+ * - PapaParse (global CDN variable, loaded in index.html)
+ * - CSVValidator (duplicate detection)
+ * - CSVMapper (column mapping)
+ * 
+ * @class CSVEngine
+ * @module Core/CSV
+ * @layer 3 - Core Services (CSV processing)
+ */
 import { CSVValidator } from './csv-validator.js';
 import { CSVMapper } from './csv-mapper.js';
 
 export class CSVEngine {
+    /**
+     * Create a new CSVEngine instance
+     * 
+     * @param {SecurityManager} securityManager - SecurityManager instance for encryption/decryption
+     * @param {DatabaseManager} databaseManager - DatabaseManager instance for database operations
+     * @throws {Error} If PapaParse is not loaded (global Papa variable missing)
+     */
     constructor(securityManager, databaseManager) {
         if (typeof Papa === 'undefined') {
             throw new Error('PapaParse is not loaded. Ensure PapaParse CDN is loaded in index.html');
@@ -16,7 +40,18 @@ export class CSVEngine {
     }
 
     /**
-     * Parse CSV file using PapaParse
+     * Parse CSV file using PapaParse library
+     * 
+     * Wraps PapaParse in a Promise for async/await compatibility.
+     * Automatically treats first row as headers and skips empty lines.
+     * 
+     * @param {File} file - CSV file object (from file input)
+     * @returns {Promise<Array<Object>>} Array of row objects with column headers as keys
+     * @throws {Error} If Papa.parse encounters an error
+     * 
+     * @example
+     * const rows = await csvEngine.parseCSV(fileInput.files[0]);
+     * // Returns: [{Date: '2024-01-01', Amount: '100.00', ...}, ...]
      */
     async parseCSV(file) {
         return new Promise((resolve, reject) => {
@@ -31,8 +66,34 @@ export class CSVEngine {
 
     /**
      * Process transaction CSV and return structured data for review
-     * @param {File} file - CSV file to process
-     * @param {string} formatId - CSV format identifier (e.g., 'capital-one-checking')
+     * 
+     * Main workflow:
+     * 1. Parse CSV using PapaParse
+     * 2. Map columns to standard format using CSVMapper
+     * 3. Validate rows and detect duplicates using CSVValidator
+     * 4. Apply description mappings (category/payee suggestions)
+     * 5. Apply account mappings for display names
+     * 6. Return enriched data for UI review
+     * 
+     * STATE REQUIREMENT: Unlocked (requires decryption for mappings)
+     * 
+     * @param {File} file - CSV file to process (from file input)
+     * @param {string} [formatId='capital-one-checking'] - CSV format identifier from csv-formats.js
+     * @returns {Promise<Array<Object>>} Array of processed transactions for review
+     * @returns {string} return[].date - Transaction date (YYYY-MM-DD)
+     * @returns {string} return[].description - Transaction description
+     * @returns {number} return[].amount - Transaction amount (positive or negative)
+     * @returns {string} return[].accountNumber - Account identifier from CSV
+     * @returns {string} return[].accountName - Mapped account name or "Account {number}"
+     * @returns {string} return[].transactionType - 'debit' or 'credit'
+     * @returns {number|string|null} return[].suggestedCategoryId - Category ID from mapping or 'TRANSFER'
+     * @returns {number|null} return[].suggestedPayeeId - Payee ID from mapping (auto-created if needed)
+     * @returns {boolean} return[].isDuplicate - Whether transaction already exists
+     * @returns {Object} return[].originalRow - Original CSV row data
+     * 
+     * @example
+     * const processed = await csvEngine.processTransactionCSV(file, 'chase-checking');
+     * // Display in review UI
      */
     async processTransactionCSV(file, formatId = 'capital-one-checking') {
         // Set the format for the mapper
@@ -59,7 +120,7 @@ export class CSVEngine {
             
             if (descMapping && descMapping.encrypted_category) {
                 try {
-                    // Decrypt the category name
+                    // STATE GUARD: Decrypt requires unlocked state
                     const categoryName = await this.security.decrypt(descMapping.encrypted_category);
                     
                     // Check if it's Transfer type
@@ -132,7 +193,40 @@ export class CSVEngine {
     }
 
     /**
-     * Import reviewed transactions to database
+     * Import reviewed transactions to database after user confirmation
+     * 
+     * Workflow:
+     * 1. Skip duplicates and user-marked items
+     * 2. Apply category/payee selections (explicit or suggested)
+     * 3. Set auto-mapping flags if using description mapping
+     * 4. Encrypt all sensitive data
+     * 5. Save to database
+     * 6. Optionally save new description mappings
+     * 
+     * SPECIAL HANDLING:
+     * - Transfer transactions: categoryId is null, encrypted_linkedTransactionId field exists (initially null)
+     * - Uncategorized: categoryId is null, no encrypted_linkedTransactionId field
+     * - Auto-mapped: useAutoCategory/useAutoPayee flags set to true
+     * 
+     * STATE REQUIREMENT: Unlocked (requires encryption)
+     * 
+     * @param {Array<Object>} reviewedData - Reviewed transactions from CSVReviewUI
+     * @param {boolean} reviewedData[].skip - Whether to skip this transaction
+     * @param {boolean} reviewedData[].isDuplicate - Whether transaction is duplicate
+     * @param {string} reviewedData[].date - Transaction date (YYYY-MM-DD)
+     * @param {string} reviewedData[].description - Transaction description
+     * @param {number} reviewedData[].amount - Transaction amount
+     * @param {string} reviewedData[].accountNumber - Account identifier
+     * @param {number|string|null} reviewedData[].categoryId - Selected category ID or 'TRANSFER'
+     * @param {number|null} reviewedData[].payeeId - Selected payee ID
+     * @param {number|string|null} reviewedData[].suggestedCategoryId - Mapping-suggested category ID
+     * @param {number|null} reviewedData[].suggestedPayeeId - Mapping-suggested payee ID
+     * @param {boolean} reviewedData[].saveMapping - Whether to save description mapping
+     * @returns {Promise<Array<number>>} Array of imported transaction IDs
+     * 
+     * @example
+     * const importedIds = await csvEngine.importReviewedTransactions(reviewedData);
+     * console.log(`Imported ${importedIds.length} transactions`);
      */
     async importReviewedTransactions(reviewedData) {
         const imported = [];
@@ -155,7 +249,7 @@ export class CSVEngine {
             const useAutoCategory = !isTransfer && hasMapping && hasMapping.encrypted_category && item.categoryId === undefined;
             const useAutoPayee = hasMapping && hasMapping.encrypted_payee && item.payeeId === undefined;
             
-            // Create transaction object
+            // SECURITY: Encrypt all fields before database storage
             const transaction = {
                 encrypted_date: await this.security.encrypt(item.date),
                 encrypted_amount: await this.security.encrypt(item.amount.toString()),
@@ -192,8 +286,37 @@ export class CSVEngine {
     }
 
     /**
-     * Process mappings CSV for import
-     * Format: Description,Category,Payee (3 columns)
+     * Process mappings CSV for import and return structured data for review
+     * 
+     * Expected CSV format:
+     * - Column 1: Description (transaction description pattern)
+     * - Column 2: Category (category name - must exist in system or be "Transfer")
+     * - Column 3: Payee (payee name - optional)
+     * 
+     * Headers can be:
+     * - Standard: "Description", "Category", "Payee" (case-insensitive)
+     * - Or use first 3 columns regardless of header names
+     * 
+     * Workflow:
+     * 1. Parse CSV files
+     * 2. Lookup category IDs by name (case-insensitive, trimmed)
+     * 3. Detect duplicates against existing mappings
+     * 4. Return enriched data for UI review
+     * 
+     * STATE REQUIREMENT: Unlocked (requires decryption for category lookup)
+     * 
+     * @param {Array<File>} files - Array of CSV files to process
+     * @returns {Promise<Array<Object>>} Array of processed mappings for review
+     * @returns {string} return[].description - Transaction description pattern
+     * @returns {string} return[].categoryName - Category name from CSV
+     * @returns {number|string|null} return[].categoryId - Resolved category ID or 'TRANSFER' or null if not found
+     * @returns {string} return[].payee - Payee name from CSV
+     * @returns {boolean} return[].isDuplicate - Whether mapping already exists
+     * @returns {boolean} return[].skip - Auto-set to true for duplicates
+     * 
+     * @example
+     * const mappings = await csvEngine.processMappingsCSV([file1, file2]);
+     * // Display in review UI
      */
     async processMappingsCSV(files) {
         const allCategories = await this.db.getAllCategories();
@@ -202,6 +325,7 @@ export class CSVEngine {
         // Create category name lookup (case-insensitive and trim whitespace)
         const categoryByName = {};
         for (const cat of allCategories) {
+            // STATE GUARD: Decrypt requires unlocked state
             const name = await this.security.decrypt(cat.encrypted_name);
             const normalizedName = name.trim().toLowerCase();
             categoryByName[normalizedName] = cat.id;
@@ -265,7 +389,32 @@ export class CSVEngine {
     }
 
     /**
-     * Import reviewed mappings to database
+     * Import reviewed mappings to database after user confirmation
+     * 
+     * Workflow:
+     * 1. Skip duplicates and user-marked items
+     * 2. Skip items without valid categoryId
+     * 3. Resolve category name (including special "Transfer" case)
+     * 4. Encrypt category and payee names
+     * 5. Save to mappings database
+     * 
+     * SPECIAL HANDLING:
+     * - Transfer mappings: categoryId is 'TRANSFER', stored as encrypted "Transfer" string
+     * - Empty payee names are stored as encrypted empty string
+     * 
+     * STATE REQUIREMENT: Unlocked (requires encryption/decryption)
+     * 
+     * @param {Array<Object>} mappingsToImport - Reviewed mappings from MappingsUI
+     * @param {boolean} mappingsToImport[].skip - Whether to skip this mapping
+     * @param {boolean} mappingsToImport[].isDuplicate - Whether mapping already exists
+     * @param {string} mappingsToImport[].description - Transaction description pattern
+     * @param {number|string|null} mappingsToImport[].categoryId - Category ID or 'TRANSFER'
+     * @param {string} mappingsToImport[].payee - Payee name
+     * @returns {Promise<Array<string>>} Array of imported description patterns
+     * 
+     * @example
+     * const imported = await csvEngine.importReviewedMappings(mappingsToImport);
+     * console.log(`Imported ${imported.length} mappings`);
      */
     async importReviewedMappings(mappingsToImport) {
         const imported = [];

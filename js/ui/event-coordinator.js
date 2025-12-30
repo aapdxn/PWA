@@ -1,12 +1,58 @@
 /**
- * Event Coordinator - Central event listener management
- * Extracts the 550+ line attachEventListeners method from UIManager
- * Coordinates all click, input, and keyboard events across the app
+ * EventCoordinator - Central event delegation system for application-wide interactions
  * 
- * @module EventCoordinator
+ * Manages all DOM event listeners across the application using event delegation
+ * patterns for better performance and maintainability. Coordinates user interactions
+ * with appropriate UI modules and state managers.
+ * 
+ * RESPONSIBILITIES:
+ * - Attach and manage all click, input, and keyboard event listeners
+ * - Delegate events to appropriate UI modules (Auth, Transaction, Budget, etc.)
+ * - Handle navigation and tab switching events
+ * - Manage filter application and search interactions
+ * - Coordinate modal lifecycle events
+ * - Handle bulk selection and transaction operations
+ * 
+ * DEPENDENCIES:
+ * - All UI modules (AuthUI, TransactionUI, BudgetUI, etc.)
+ * - TabManager: Tab navigation and visibility
+ * - FilterManager: Filter state and application
+ * - CSVEngine: CSV processing
+ * - ModalManager: Modal displays
+ * 
+ * EVENT DELEGATION PATTERN:
+ * Uses document-level event listeners with .closest() checks for better
+ * performance with dynamic content. Listeners remain active even when
+ * DOM elements are replaced during rendering.
+ * 
+ * CATEGORIZATION:
+ * Events are grouped into logical categories (auth, transaction, category,
+ * mapping, filter, search, modal, summary, keyboard) for maintainability.
+ * 
+ * @class EventCoordinator
+ * @module UI/EventCoordination
+ * @layer 5 - UI Components
  */
 
 export class EventCoordinator {
+    /**
+     * Creates EventCoordinator instance with references to all UI modules and managers
+     * 
+     * @param {Object} uiModules - Collection of UI module instances
+     * @param {AuthUI} uiModules.authUI - Authentication UI
+     * @param {TransactionUI} uiModules.transactionUI - Transaction management UI
+     * @param {BudgetUI} uiModules.budgetUI - Budget/category management UI
+     * @param {CSVReviewUI} uiModules.csvReviewUI - CSV import review UI
+     * @param {CSVEngine} uiModules.csvEngine - CSV processing engine
+     * @param {ModalManager} uiModules.modalManager - Modal management
+     * @param {MappingsUI} uiModules.mappingsUI - Description mappings UI
+     * @param {AccountMappingsUI} uiModules.accountMappingsUI - Account mappings UI
+     * @param {TabManager} tabManager - Tab navigation manager
+     * @param {FilterManager} filterManager - Filter state manager
+     * @param {Object} callbacks - State transition callbacks
+     * @param {Function} callbacks.onSetupSuccess - Called after successful password setup
+     * @param {Function} callbacks.onUnlockSuccess - Called after successful unlock
+     */
     constructor(uiModules, tabManager, filterManager, callbacks) {
         this.authUI = uiModules.authUI;
         this.transactionUI = uiModules.transactionUI;
@@ -25,7 +71,25 @@ export class EventCoordinator {
     }
 
     /**
-     * Attach all event listeners for the application
+     * Attach all application event listeners using categorized delegation
+     * 
+     * Calls specialized attachment methods for each event category to keep
+     * listener logic organized and maintainable. Uses document-level event
+     * delegation to handle dynamic content.
+     * 
+     * EVENT CATEGORIES:
+     * - Navigation: Tab switching, back buttons, bottom nav
+     * - Auth: Setup and unlock form submissions
+     * - Transaction: CRUD operations, FAB menu, CSV import, bulk actions
+     * - Category: Budget category CRUD operations
+     * - Mapping: Account and description mapping CRUD
+     * - Filter: Advanced search panel, filter application/clearing
+     * - Search: Real-time transaction search with field selection
+     * - Modal: Generic modal close handlers
+     * - Summary: Detail panel toggles
+     * - Keyboard: Enter key handling for forms
+     * 
+     * @public
      */
     attachEventListeners() {
         console.log('🔗 Attaching event listeners...');

@@ -175,6 +175,22 @@
 
 ---
 
+## 📏 CODE ORGANIZATION
+
+### Issue: File Size Exceeded - transaction-ui.js (Issue #40)
+**Date Identified:** 2025-12-30  
+**Symptom:** transaction-ui.js reached 961 lines (exceeds 800-line limit by 161 lines)  
+**Status:** DOCUMENTED - Needs refactoring  
+**Root Cause:** Main transaction CRUD file accumulated render logic, event handlers, and form validation  
+**Recommended Solution:**  
+- Extract render logic to `transaction-renderer.js` (pagination, display)
+- Move event handlers to `transaction-event-handlers.js`
+- Extract form validation to `transaction-form-validator.js`
+- Keep only core coordination logic in transaction-ui.js
+**Prevention:** Run `.\scripts\file-size-monitor.ps1` before adding features. If file >500 lines, create new module instead.
+
+---
+
 **Archive Started:** 2025-12-23  
-**Last Updated:** 2025-12-23  
-**Total Issues Documented:** 39
+**Last Updated:** 2025-12-30  
+**Total Issues Documented:** 40

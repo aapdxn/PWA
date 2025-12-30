@@ -1,7 +1,37 @@
-// transaction-select-manager.js - Manages category, payee, and link select dropdowns
+/**
+ * TransactionSelectManager - Manages category, payee, and link select dropdowns
+ * 
+ * RESPONSIBILITIES:
+ * - Populate category select with auto-mapping indicators
+ * - Populate payee select with auto-mapping indicators
+ * - Populate link select (eligible transfers for linking)
+ * - Handle "Create New" category/payee inline creation
+ * - Handle auto-mapping creation (prompt user to map description)
+ * - Setup change listeners for dynamic behavior (Transfer type)
+ * 
+ * STATE REQUIREMENTS:
+ * - Requires Unlocked state (encrypts/decrypts category/payee names)
+ * - Reads description field to show auto-mapping hints
+ * 
+ * AUTO-MAPPING INDICATORS:
+ * - "🔄 Auto" option shows mapped category/payee if exists
+ * - "🔄 Auto (Groceries)" if description maps to Groceries
+ * 
+ * CUSTOM SELECT INTEGRATION:
+ * - Uses CustomSelect for better mobile UX
+ * - Refresh after populating options
+ * 
+ * @class TransactionSelectManager
+ * @module UI/Transaction
+ * @layer 5 - UI Components
+ */
 import { CustomSelect } from './custom-select.js';
 
 export class TransactionSelectManager {
+    /**
+     * Create TransactionSelectManager
+     * @param {Object} deps - Dependencies { security, db, accountMappingsUI }
+     */
     constructor(deps) {
         Object.assign(this, deps); // { security, db, accountMappingsUI }
         
@@ -12,7 +42,10 @@ export class TransactionSelectManager {
     }
 
     /**
-     * Initialize custom select instances
+     * Initialize custom select instances for better mobile UX
+     * Creates CustomSelect wrappers for category, payee, link dropdowns
+     * 
+     * TIMING: Called when opening transaction modal
      */
     initializeSelects() {
         const categorySelectEl = document.getElementById('transaction-category');
@@ -33,6 +66,16 @@ export class TransactionSelectManager {
 
     /**
      * Populate category select dropdown with auto-mapping support
+     * 
+     * OPTIONS:
+     * - Clear Category (if value exists)
+     * - 🔄 Auto (with mapped category hint if description maps)
+     * - ➕ Create New Category
+     * - Transfer
+     * - Categories grouped by type (Income, Expense, Saving)
+     * 
+     * STATE: Requires Unlocked (decrypts category names)
+     * AUTO-MAPPING: Reads description field to show hint
      */
     async populateCategorySelect() {
         const select = document.getElementById('transaction-category');
@@ -100,6 +143,15 @@ export class TransactionSelectManager {
 
     /**
      * Setup category select change listener
+     * 
+     * BEHAVIORS:
+     * - CREATE_NEW: Opens category creation prompt
+     * - AUTO: Prompts for mapping if none exists
+     * - TRANSFER: Shows link field, hides category requirement
+     * - Other: Hides link field, shows category requirement
+     * 
+     * TIMING: Called after populateCategorySelect
+     * PATTERN: Removes old listener before adding new (prevents duplicates)
      */
     setupCategoryChangeListener() {
         const categorySelect = document.getElementById('transaction-category');
@@ -164,6 +216,14 @@ export class TransactionSelectManager {
 
     /**
      * Check if category value resolves to Transfer
+     * 
+     * @param {string} value - Category select value
+     * @returns {Promise<boolean>} True if Transfer type
+     * 
+     * RESOLVES:
+     * - 'TRANSFER' → true
+     * - 'AUTO' → true if mapping resolves to 'Transfer'
+     * - Other → false
      */
     async isCategoryTransfer(value) {
         if (value === 'TRANSFER') return true;
@@ -188,6 +248,15 @@ export class TransactionSelectManager {
 
     /**
      * Populate payee select dropdown with auto-mapping support
+     * 
+     * OPTIONS:
+     * - Clear Payee (if value exists)
+     * - 🔄 Auto (with mapped payee hint if description maps)
+     * - ➕ Add New Payee
+     * - Payees (alphabetically sorted)
+     * 
+     * STATE: Requires Unlocked (decrypts payee names)
+     * AUTO-MAPPING: Reads description field to show hint
      */
     async populatePayeeSelect() {
         const select = document.getElementById('transaction-payee');
@@ -253,6 +322,13 @@ export class TransactionSelectManager {
 
     /**
      * Setup payee select change listener
+     * 
+     * BEHAVIORS:
+     * - ADD_NEW: Opens payee creation prompt (checks duplicates)
+     * - AUTO: Prompts for mapping if none exists
+     * 
+     * TIMING: Called after populatePayeeSelect
+     * PATTERN: Removes old listener before adding new
      */
     setupPayeeChangeListener() {
         const payeeSelect = document.getElementById('transaction-payee');
@@ -328,6 +404,22 @@ export class TransactionSelectManager {
 
     /**
      * Populate link select for transfer transactions
+     * Shows eligible transfers that can be linked
+     * 
+     * ELIGIBILITY CRITERIA:
+     * - Is a Transfer (no categoryId)
+     * - Different account
+     * - Not already linked to another transaction
+     * - Within ±10 days (if currentDate set)
+     * 
+     * SORTING:
+     * - Same date first
+     * - Then by date descending
+     * 
+     * FILTERING:
+     * - If amount entered, only show matching amounts
+     * 
+     * STATE: Requires Unlocked (decrypts transaction data)
      */
     async populateLinkSelect() {
         const linkSelect = document.getElementById('transaction-link');
@@ -445,7 +537,20 @@ export class TransactionSelectManager {
     }
 
     /**
-     * Handle creating a new category mapping
+     * Handle creating a new category mapping for description
+     * Prompts user to select category from list
+     * 
+     * @param {string} description - Transaction description to map
+     * @returns {Promise<boolean>} True if mapping created
+     * 
+     * WORKFLOW:
+     * 1. Show numbered list of categories + Transfer
+     * 2. User enters number
+     * 3. Create mapping (encrypt category name)
+     * 4. Refresh category select
+     * 5. Keep AUTO selected
+     * 
+     * STATE: Requires Unlocked (encrypts category name)
      */
     async handleCreateCategoryMapping(description) {
         const categories = await this.db.getAllCategories();
@@ -509,7 +614,20 @@ export class TransactionSelectManager {
     }
 
     /**
-     * Handle creating a new payee mapping
+     * Handle creating a new payee mapping for description
+     * Prompts user to select payee from list
+     * 
+     * @param {string} description - Transaction description to map
+     * @returns {Promise<boolean>} True if mapping created
+     * 
+     * WORKFLOW:
+     * 1. Show numbered list of payees (alphabetical)
+     * 2. User enters number
+     * 3. Create/update mapping (encrypt payee name)
+     * 4. Refresh payee select
+     * 5. Keep AUTO selected
+     * 
+     * STATE: Requires Unlocked (encrypts payee name)
      */
     async handleCreatePayeeMapping(description) {
         const payees = await this.db.getAllPayees();
@@ -566,7 +684,18 @@ export class TransactionSelectManager {
     }
 
     /**
-     * Handle creating a new category
+     * Handle creating a new category inline
+     * Prompts for name and type
+     * 
+     * WORKFLOW:
+     * 1. Prompt for category name
+     * 2. Check for duplicates (case-insensitive)
+     * 3. Prompt for type (1=Income, 2=Expense, 3=Saving)
+     * 4. Create category (encrypt name)
+     * 5. Refresh category select
+     * 6. Auto-select new category
+     * 
+     * STATE: Requires Unlocked (encrypts category name)
      */
     async handleCreateNewCategory() {
         const categoryName = prompt('Enter new category name:');
@@ -634,6 +763,17 @@ export class TransactionSelectManager {
 
     /**
      * Setup description change listener to update Auto options
+     * Refreshes category/payee selects when description changes
+     * 
+     * TIMING: Called when opening transaction modal
+     * TRIGGER: On blur of description input
+     * 
+     * BEHAVIOR:
+     * - Repopulates category/payee selects
+     * - Restores previous selections if still valid
+     * - Auto-selects AUTO option for new transactions if mapping exists
+     * 
+     * PATTERN: Removes old listener before adding new
      */
     setupDescriptionChangeListener() {
         const descriptionInput = document.getElementById('transaction-description');

@@ -1,8 +1,29 @@
-// transaction-templates.js - HTML templates for transaction UI
-// Separating templates from logic for cleaner code organization
+/**
+ * TransactionTemplates - Reusable transaction generation functions
+ * 
+ * Provides factory functions for creating common transaction types:
+ * - Split transactions (dividends with tax split)
+ * - Transfer transactions (linked pairs)
+ * - Recurring transactions
+ * 
+ * USAGE:
+ * Import desired template functions and call with appropriate parameters.
+ * All functions return transaction objects ready for database insertion.
+ * 
+ * @module Templates/Transaction
+ * @layer 4 - Templates (Reusable patterns)
+ */
 
 /**
- * Empty state when no transactions exist
+ * Generates HTML for empty state display when no transactions exist
+ * 
+ * Displays a centered message with inbox icon prompting user to add first transaction.
+ * Used by TransactionUI when database has zero transactions.
+ * 
+ * @returns {string} HTML string containing empty state markup
+ * @example
+ * const html = emptyStateTemplate();
+ * container.innerHTML = html;
  */
 export const emptyStateTemplate = () => `
     <div class="transactions-scroll-container">
@@ -17,7 +38,15 @@ export const emptyStateTemplate = () => `
 `;
 
 /**
- * No results when search/filter returns empty
+ * Generates HTML for no results state when search/filter returns empty
+ * 
+ * Displays message indicating no transactions match current search criteria.
+ * Used by TransactionUI when filters are active but produce no matches.
+ * 
+ * @returns {string} HTML string containing no results message
+ * @example
+ * const html = noResultsTemplate();
+ * container.innerHTML = html;
  */
 export const noResultsTemplate = () => `
     <div class="empty-state">
@@ -26,8 +55,36 @@ export const noResultsTemplate = () => `
 `;
 
 /**
- * Transaction list item template
- * @param {Object} params - { checkboxHtml, dataAttributes, displayText, linkIcon, amountSign, displayAmount, amountClass, formattedDate, dateBadges, isSelected }
+ * Generates HTML for a single transaction list item
+ * 
+ * Creates a clickable transaction row with checkbox (in selection mode), description,
+ * amount with color coding, date, and optional badges. Supports linked transfer indicators.
+ * 
+ * @param {Object} params - Transaction rendering parameters
+ * @param {string} params.checkboxHtml - HTML for selection checkbox (empty string if not in selection mode)
+ * @param {Object} params.dataAttributes - Object containing selectionMode boolean and attrs string
+ * @param {string} params.displayText - Formatted transaction description/payee text
+ * @param {string} params.linkIcon - HTML for transfer link icon (empty string if not linked)
+ * @param {string} params.amountSign - '+' or '-' or '' depending on transaction type
+ * @param {number} params.displayAmount - Absolute amount value to display
+ * @param {string} params.amountClass - CSS class for amount styling ('positive', 'negative', etc.)
+ * @param {string} params.formattedDate - Human-readable date string
+ * @param {string} params.dateBadges - HTML for date badges (today, yesterday, etc.)
+ * @param {boolean} params.isSelected - Whether transaction is currently selected in bulk mode
+ * @returns {string} HTML string for transaction list item
+ * @example
+ * const html = transactionItemTemplate({
+ *   checkboxHtml: '<input type="checkbox" checked>',
+ *   dataAttributes: { selectionMode: true, attrs: 'data-id="123"' },
+ *   displayText: 'Grocery Store',
+ *   linkIcon: '',
+ *   amountSign: '-',
+ *   displayAmount: 45.67,
+ *   amountClass: 'negative',
+ *   formattedDate: 'Dec 30, 2025',
+ *   dateBadges: '<span class="badge">Today</span>',
+ *   isSelected: true
+ * });
  */
 export const transactionItemTemplate = (params) => {
     const { checkboxHtml, dataAttributes, displayText, linkIcon, amountSign, displayAmount, amountClass, formattedDate, dateBadges, isSelected } = params;
@@ -48,8 +105,17 @@ export const transactionItemTemplate = (params) => {
 };
 
 /**
- * Bulk selection toolbar
- * @param {number} selectedCount - Number of selected transactions
+ * Generates HTML for bulk selection toolbar with action buttons
+ * 
+ * Creates sticky toolbar with selection count, cancel button, select all, auto-link transfers,
+ * category/payee bulk change dropdowns, and apply button. Buttons disabled when selectedCount is 0.
+ * 
+ * @param {number} selectedCount - Number of currently selected transactions
+ * @returns {string} HTML string for bulk selection toolbar
+ * @example
+ * const html = selectionToolbarTemplate(5);
+ * document.getElementById('toolbar-container').innerHTML = html;
+ * // Dropdowns populated separately by TransactionUI
  */
 export const selectionToolbarTemplate = (selectedCount) => `
     <div class="bulk-selection-toolbar" id="bulk-selection-toolbar">
@@ -72,8 +138,19 @@ export const selectionToolbarTemplate = (selectedCount) => `
 `;
 
 /**
- * Transaction count header
- * @param {Object} counts - { total, visible, showing }
+ * Generates HTML for transaction count header
+ * 
+ * Displays total transactions, visible after filters, and currently shown (if pagination active).
+ * Used at top of transaction list to provide data overview.
+ * 
+ * @param {Object} counts - Transaction count statistics
+ * @param {number} counts.total - Total number of transactions in database
+ * @param {number} counts.visible - Number of transactions matching current filters
+ * @param {number} counts.showing - Number of transactions currently rendered (pagination)
+ * @returns {string} HTML string for count header
+ * @example
+ * const html = transactionCountTemplate({ total: 150, visible: 50, showing: 20 });
+ * // Output: "150 transactions (50 visible, showing 20)"
  */
 export const transactionCountTemplate = (counts) => `
     <div style="padding: 12px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
@@ -85,8 +162,17 @@ export const transactionCountTemplate = (counts) => `
 `;
 
 /**
- * Load more button
- * @param {number} remaining - Number of remaining items to load
+ * Generates HTML for "Load More" button with remaining count
+ * 
+ * Creates centered button showing how many additional transactions can be loaded.
+ * Used in pagination when more transactions exist beyond current display limit.
+ * 
+ * @param {number} remaining - Number of transactions not yet displayed
+ * @returns {string} HTML string for load more button
+ * @example
+ * const html = loadMoreButtonTemplate(30);
+ * container.insertAdjacentHTML('beforeend', html);
+ * // Button text: "Load More (30 more)"
  */
 export const loadMoreButtonTemplate = (remaining) => `
     <div style="padding: 16px; text-align: center;">
@@ -97,8 +183,36 @@ export const loadMoreButtonTemplate = (remaining) => `
 `;
 
 /**
- * Transaction modal template
- * @param {Object} data - Modal data (transaction if editing, null if creating)
+ * Generates HTML for transaction add/edit modal form
+ * 
+ * Creates full modal with form fields for date, amount, description, account, category,
+ * payee, transfer link, and note. Modal title and buttons change based on edit vs. create mode.
+ * Delete button only shown when editing existing transaction.
+ * 
+ * NOTE: Category and payee dropdowns are placeholders; actual CustomSelect instances
+ * are created separately by TransactionUI after modal is rendered.
+ * 
+ * @param {Object} [data={}] - Transaction data for pre-filling form (edit mode)
+ * @param {number} [data.id] - Transaction ID (presence indicates edit mode)
+ * @param {string} [data.date] - ISO date string (YYYY-MM-DD)
+ * @param {number} [data.amount] - Transaction amount (signed)
+ * @param {string} [data.description] - Transaction description
+ * @param {string} [data.account] - Account name
+ * @param {string} [data.note] - Optional note text
+ * @returns {string} HTML string for transaction modal
+ * @example
+ * // Create mode
+ * const html = transactionModalTemplate();
+ * 
+ * // Edit mode
+ * const html = transactionModalTemplate({
+ *   id: 123,
+ *   date: '2025-12-30',
+ *   amount: -45.67,
+ *   description: 'Grocery Store',
+ *   account: 'Checking',
+ *   note: 'Weekly groceries'
+ * });
  */
 export const transactionModalTemplate = (data = {}) => {
     const isEdit = !!data.id;
@@ -194,8 +308,28 @@ export const transactionModalTemplate = (data = {}) => {
 };
 
 /**
- * Transfer link selection modal
- * @param {Array} matchingTransfers - Array of potential transfer matches
+ * Generates HTML for transfer link selection modal
+ * 
+ * Displays list of potential matching transfer transactions for user to select from.
+ * Each option shows description, account, amount, and date. Used when linking transfers
+ * to create paired transactions.
+ * 
+ * NOTE: After linking, both transactions will have encrypted_linkedTransactionId field
+ * pointing to each other. This enables transfer detection and prevents double-counting.
+ * 
+ * @param {Array<Object>} matchingTransfers - Array of candidate transfer transactions
+ * @param {number} matchingTransfers[].id - Transaction ID
+ * @param {string} matchingTransfers[].description - Transaction description
+ * @param {string} matchingTransfers[].account - Account name
+ * @param {number} matchingTransfers[].amount - Transaction amount (signed)
+ * @param {string} matchingTransfers[].date - ISO date string
+ * @returns {string} HTML string for transfer link modal
+ * @example
+ * const candidates = [
+ *   { id: 456, description: 'Transfer to Savings', account: 'Checking', amount: -500, date: '2025-12-30' },
+ *   { id: 457, description: 'Transfer from Checking', account: 'Savings', amount: 500, date: '2025-12-30' }
+ * ];
+ * const html = transferLinkModalTemplate(candidates);
  */
 export const transferLinkModalTemplate = (matchingTransfers) => {
     const transfersList = matchingTransfers.map(t => `
@@ -231,8 +365,23 @@ export const transferLinkModalTemplate = (matchingTransfers) => {
 };
 
 /**
- * Filter panel template
- * @param {Object} options - { categories, accounts, descriptions }
+ * Generates HTML for advanced filter panel
+ * 
+ * Creates collapsible panel with filters for category type, specific categories,
+ * accounts, amount range, date range, and special conditions (unlinked transfers,
+ * uncategorized). Filter values applied via FilterManager.
+ * 
+ * @param {Object} options - Available filter options from database
+ * @param {Array<string>} options.categories - List of unique category names
+ * @param {Array<string>} options.accounts - List of unique account names
+ * @param {Array<string>} [options.descriptions] - List of unique descriptions (not currently used in template)
+ * @returns {string} HTML string for filter panel
+ * @example
+ * const html = filterPanelTemplate({
+ *   categories: ['Groceries', 'Gas', 'Salary'],
+ *   accounts: ['Checking', 'Savings', 'Credit Card']
+ * });
+ * container.innerHTML = html;
  */
 export const filterPanelTemplate = (options) => `
     <div id="filter-panel" class="filter-panel hidden">

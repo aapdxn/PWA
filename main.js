@@ -1,11 +1,43 @@
-// Main Application Entry Point - Modular ES6 Version
-// Uses global CDN variables: Dexie, Papa, lucide
+/**
+ * Main Application Entry Point
+ * 
+ * APPLICATION LIFECYCLE:
+ * 1. Wait for CDN dependencies (Dexie, PapaParse, Lucide)
+ * 2. Initialize core modules (SecurityManager, DatabaseManager, CSVEngine)
+ * 3. Initialize UI (UIManager with dependency injection)
+ * 4. Determine app state (Setup / Locked / Unlocked)
+ * 5. Render appropriate UI
+ * 
+ * STATE FLOW:
+ * - Setup: First run, no password set
+ * - Locked: Password exists, not authenticated
+ * - Unlocked: Authenticated, encryption key in memory
+ * 
+ * ARCHITECTURE:
+ * - Dependency Injection: All modules receive dependencies via constructor
+ * - No Circular Dependencies: Strict layered architecture (see module-dependencies.md)
+ * - CDN Global Variables: Dexie, Papa (PapaParse), lucide
+ * 
+ * @module Main
+ * @layer 6 - Entry Point (Application Controller)
+ */
 import { SecurityManager } from './js/core/security.js';
 import { DatabaseManager } from './js/core/database.js';
 import { CSVEngine } from './js/core/csv-engine.js';
 import { UIManager } from './js/ui/ui-manager.js';
 
+/**
+ * App - Main application controller
+ * 
+ * @class App
+ */
 class App {
+    /**
+     * Initialize App
+     * Waits for CDN dependencies before bootstrapping
+     * 
+     * @constructor
+     */
     constructor() {
         console.log('🚀 App constructor called');
         
@@ -25,6 +57,15 @@ class App {
         });
     }
 
+    /**
+     * Wait for CDN dependencies to load
+     * 
+     * Polls for Dexie, Papa (PapaParse), and Lucide global variables.
+     * Retries for up to 5 seconds (50 attempts * 100ms).
+     * 
+     * @returns {Promise<void>} Resolves when dependencies are ready or timeout
+     * @private
+     */
     async waitForDependencies() {
         return new Promise((resolve) => {
             let attempts = 0;
@@ -51,6 +92,18 @@ class App {
         });
     }
 
+    /**
+     * Initialize application
+     * 
+     * WORKFLOW:
+     * 1. Check app state (Setup / Locked / Unlocked)
+     * 2. Set up state transition callbacks
+     * 3. Attach UI event listeners
+     * 4. Render initial UI
+     * 
+     * @returns {Promise<void>}
+     * @private
+     */
     async init() {
         console.log('📱 Initializing app...');
         
@@ -71,6 +124,16 @@ class App {
         }
     }
 
+    /**
+     * Determine current application state
+     * 
+     * STATE DETERMINATION:
+     * - If no password hash exists → Setup (first run)
+     * - If password hash exists → Locked (needs authentication)
+     * 
+     * @returns {Promise<void>} Sets this.appState to 'setup' or 'locked'
+     * @private
+     */
     async checkAppState() {
         try {
             const passwordHash = await this.db.getSetting('passwordHash');
@@ -88,6 +151,15 @@ class App {
         }
     }
 
+    /**
+     * Handle successful password setup
+     * 
+     * STATE TRANSITION: Setup → Unlocked
+     * Triggered after user creates password and encryption is initialized.
+     * 
+     * @returns {Promise<void>}
+     * @private
+     */
     async onSetupSuccess() {
         console.log('🎉 Setup successful, transitioning to unlocked state');
         this.appState = 'unlocked';
@@ -100,6 +172,15 @@ class App {
         this.render();
     }
 
+    /**
+     * Handle successful password unlock
+     * 
+     * STATE TRANSITION: Locked → Unlocked
+     * Triggered after user enters correct password and encryption is initialized.
+     * 
+     * @returns {Promise<void>}
+     * @private
+     */
     async onUnlockSuccess() {
         console.log('🎉 Unlock successful, transitioning to unlocked state');
         this.appState = 'unlocked';
@@ -112,6 +193,19 @@ class App {
         this.render();
     }
 
+    /**
+     * Render current application state
+     * 
+     * SCREEN VISIBILITY:
+     * - Setup state → Show setup-screen
+     * - Locked state → Show locked-screen
+     * - Unlocked state → Show dashboard-screen
+     * 
+     * Uses .hidden class to control visibility.
+     * 
+     * @returns {void}
+     * @private
+     */
     render() {
         console.log('🎨 Rendering app state:', this.appState);
         

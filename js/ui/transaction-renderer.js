@@ -1,8 +1,39 @@
-// transaction-renderer.js - Transaction list rendering, caching, pagination, display logic
+/**
+ * TransactionRenderer - Transaction list rendering with caching and pagination
+ * 
+ * RESPONSIBILITIES:
+ * - Render transaction list with pagination (50 items per page)
+ * - Cache decrypted transactions for performance
+ * - Apply search, filter, sort logic
+ * - Merge linked transfers into single display item
+ * - Generate transaction HTML from templates
+ * 
+ * STATE REQUIREMENTS:
+ * - Requires Unlocked state (decrypts all transactions)
+ * - Cache invalidation on data changes via clearCache()
+ * 
+ * PERFORMANCE:
+ * - Caches decrypted transactions (150+ transactions = 2-3s decrypt time)
+ * - Pagination prevents rendering thousands of items at once
+ * - Template-based HTML generation (no direct DOM manipulation)
+ * 
+ * CATEGORY-AWARE AMOUNT SIGNING:
+ * - Income: Always positive (green +)
+ * - Expense/Saving: Always negative (red −)
+ * - Transfer: Positive for merged display (green +)
+ * 
+ * @class TransactionRenderer
+ * @module UI/Transaction
+ * @layer 5 - UI Components
+ */
 import { decryptTransaction, formatCurrency, getAmountClass, initIcons } from '../core/ui-helpers.js';
 import * as templates from '../templates/transaction-templates.js';
 
 export class TransactionRenderer {
+    /**
+     * Create TransactionRenderer
+     * @param {Object} deps - Dependencies { security, db, accountMappingsUI, transactionUI }
+     */
     constructor(deps) {
         Object.assign(this, deps); // { security, db, accountMappingsUI }
         
@@ -14,7 +45,11 @@ export class TransactionRenderer {
         this.isLoadingMore = false;
     }
     
-    // Clear cache when data changes
+    /**
+     * Clear decrypted transaction cache
+     * CRITICAL: Call after any transaction save/delete
+     * Resets pagination to page 1
+     */
     clearCache() {
         this.cachedDecryptedTransactions = null;
         this.cacheTimestamp = null;
@@ -115,6 +150,17 @@ export class TransactionRenderer {
 
     /**
      * Get decrypted transactions with caching
+     * 
+     * CACHING STRATEGY:
+     * 1. Check parent TransactionUI cache (from preload)
+     * 2. Check local cache if lengths match
+     * 3. Decrypt all transactions if cache miss
+     * 
+     * @param {Array} allTransactions - Raw encrypted transactions from DB
+     * @returns {Promise<Array>} Decrypted transactions with resolved categories/payees
+     * 
+     * PERFORMANCE: 150+ transactions = 2-3 seconds decrypt time
+     * STATE: Requires Unlocked (calls security.decrypt)
      */
     async getDecryptedTransactions(allTransactions) {
         // Check parent TransactionUI cache first (from preload)
@@ -133,6 +179,7 @@ export class TransactionRenderer {
         
         console.log('🔄 Decrypting transactions...');
         
+        // STATE GUARD: Decrypt requires unlocked state
         // Fetch all related data
         const categories = await this.db.getAllCategories();
         const payees = await this.db.getAllPayees();
@@ -157,7 +204,13 @@ export class TransactionRenderer {
     }
 
     /**
-     * Add merged display names for linked transfers (for search)
+     * Add merged display names for linked transfers
+     * Enables search of "Transfer from X to Y" format
+     * 
+     * @param {Array} transactions - Decrypted transactions
+     * @returns {Array} Transactions with mergedDisplayName property
+     * 
+     * EXAMPLE: "Transfer from Checking to Savings"
      */
     addMergedDisplayNames(transactions) {
         return transactions.map(t => {
@@ -175,6 +228,18 @@ export class TransactionRenderer {
 
     /**
      * Apply search, filter, and sort to transactions
+     * 
+     * @param {Array} transactions - Decrypted transactions
+     * @param {Object} options - { searchQuery, filters, sortField, sortOrder }
+     * @returns {Array} Filtered and sorted transactions
+     * 
+     * FILTERS:
+     * - categories, types, accounts, descriptions
+     * - amountMin, amountMax (absolute values)
+     * - dateStart, dateEnd
+     * - unlinkedTransfersOnly, uncategorizedOnly
+     * 
+     * SORT FIELDS: date, amount, description, account, category
      */
     applySearchFilterSort(transactions, options) {
         const { searchQuery, filters, sortField, sortOrder } = options;
@@ -265,7 +330,23 @@ export class TransactionRenderer {
     }
 
     /**
-     * Render individual transaction items
+     * Render individual transaction items with merged transfer display
+     * 
+     * @param {Array} paginatedTransactions - Transactions to display (current page)
+     * @param {Array} allDecryptedTransactions - All decrypted (for linked transfer lookup)
+     * @param {boolean} selectionMode - Show checkboxes if true
+     * @param {Set} selectedIds - Currently selected transaction IDs
+     * @returns {string} HTML string
+     * 
+     * MERGED TRANSFER DISPLAY:
+     * - Linked transfers shown as single item: "Transfer from X to Y"
+     * - Always positive amount (green)
+     * - Both transaction IDs tracked in data attributes
+     * - Prevents duplicate display of linked transaction
+     * 
+     * CATEGORY-AWARE AMOUNT SIGNING:
+     * - Uses getAmountClass() for color (Income=green, Expense=red)
+     * - Sign indicator: + or −
      */
     renderTransactionItems(paginatedTransactions, allDecryptedTransactions, selectionMode, selectedIds) {
         // Track which transactions have been displayed as part of a merged transfer
@@ -378,7 +459,17 @@ export class TransactionRenderer {
     }
 
     /**
-     * Build date badges for category/account display
+     * Build category and account badges for transaction display
+     * 
+     * @param {Object} t - Decrypted transaction
+     * @returns {string} HTML badges
+     * 
+     * BADGE COLORS:
+     * - Income: Green
+     * - Expense: Red
+     * - Transfer: Blue
+     * - Saving: Orange
+     * - Uncategorized: Gray
      */
     buildDateBadges(t) {
         let dateBadges = '';

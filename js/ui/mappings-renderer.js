@@ -1,11 +1,33 @@
 /**
- * Mappings Renderer - Display and filtering logic for mappings list
- * Handles rendering, search, and category filtering
+ * MappingsRenderer - Mappings List Display & Filtering
  * 
- * @module MappingsRenderer
+ * RESPONSIBILITIES:
+ * - Render mappings tab with search and category filters
+ * - Display all description -> category/payee mappings
+ * - Provide search functionality (description/category/payee)
+ * - Enable multi-select category filtering
+ * - Show visible count updates
+ * - Handle empty state display
+ * - Attach event listeners for search/filter interactions
+ * 
+ * FILTER FEATURES:
+ * - Text Search: Matches description, category name, or payee name
+ * - Category Filters: Multi-select checkboxes for each unique category
+ * - Real-time Updates: Instant filtering as user types/selects
+ * - Clear Filters: One-click reset to show all mappings
+ * 
+ * @class MappingsRenderer
+ * @module UI/Mappings
+ * @layer 5 - UI Components
  */
 
 export class MappingsRenderer {
+    /**
+     * Initialize mappings renderer
+     * 
+     * @param {SecurityManager} security - For decrypting category/payee names
+     * @param {DatabaseManager} db - For fetching mappings data
+     */
     constructor(security, db) {
         this.security = security;
         this.db = db;
@@ -14,6 +36,9 @@ export class MappingsRenderer {
 
     /**
      * Render the mappings tab with search and filters
+     * Fetches all mappings, decrypts names, builds UI with search/filter controls
+     * 
+     * @returns {Promise<void>}
      */
     async renderMappingsTab() {
         console.log('🔗 Rendering mappings tab');
@@ -25,6 +50,7 @@ export class MappingsRenderer {
         
         const allMappings = await this.db.getAllMappingsDescriptions();
         
+        // STATE GUARD: Decrypt requires unlocked state
         const mappingsData = await Promise.all(allMappings.map(async (mapping) => {
             const categoryName = mapping.encrypted_category 
                 ? await this.security.decrypt(mapping.encrypted_category) 
@@ -190,6 +216,15 @@ export class MappingsRenderer {
 
     /**
      * Filter mappings based on search and category filters
+     * Shows/hides items based on search text and selected category checkboxes
+     * Updates visible count display
+     * 
+     * FILTER LOGIC:
+     * - Search matches description OR category OR payee (case-insensitive)
+     * - Category filter uses OR logic (show if ANY selected category matches)
+     * - Both filters use AND logic (must pass both to be visible)
+     * 
+     * @returns {void}
      */
     filterMappings() {
         const searchTerm = document.getElementById('mappings-search')?.value.toLowerCase() || '';

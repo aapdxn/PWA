@@ -1,13 +1,39 @@
 /**
- * Mappings Form - Modal management for creating/editing mappings
- * Handles the manual mapping modal, form submission, and deletion
+ * MappingsForm - Mapping CRUD Form Modal Manager
  * 
- * @module MappingsForm
+ * RESPONSIBILITIES:
+ * - Display modal for adding/editing mappings
+ * - Handle form validation and submission
+ * - Encrypt mapping data before storage
+ * - Support deletion of existing mappings
+ * - Initialize CustomSelect for category dropdown
+ * - Manage modal behavior (readonly fields in edit mode)
+ * 
+ * VALIDATION RULES:
+ * - Description: Required, becomes readonly in edit mode
+ * - Category: Required (regular category or "Transfer")
+ * - Payee: Optional, will be encrypted if provided
+ * 
+ * EDIT MODE BEHAVIOR:
+ * - Description field is readonly (cannot change mapping key)
+ * - Delete button appears in modal actions
+ * - Save button changes to checkmark icon
+ * - Pre-fills all fields with existing data
+ * 
+ * @class MappingsForm
+ * @module UI/Mappings
+ * @layer 5 - UI Components
  */
 
 import { CustomSelect } from './custom-select.js';
 
 export class MappingsForm {
+    /**
+     * Initialize mappings form manager
+     * 
+     * @param {SecurityManager} security - For encrypting mapping data
+     * @param {DatabaseManager} db - For CRUD operations on mappings
+     */
     constructor(security, db) {
         this.security = security;
         this.db = db;
@@ -16,6 +42,10 @@ export class MappingsForm {
 
     /**
      * Open mapping for editing
+     * Fetches existing mapping data, decrypts it, and pre-fills edit modal
+     * 
+     * @param {string} description - Description key to edit
+     * @returns {Promise<void>}
      */
     async openMappingForEdit(description) {
         const allMappings = await this.db.getAllMappingsDescriptions();
@@ -26,6 +56,7 @@ export class MappingsForm {
             return;
         }
         
+        // STATE GUARD: Decrypt requires unlocked state
         // Decrypt the mapping data
         const categoryName = mapping.encrypted_category 
             ? await this.security.decrypt(mapping.encrypted_category) 
@@ -64,6 +95,13 @@ export class MappingsForm {
 
     /**
      * Show manual mapping modal (add or edit)
+     * Builds modal HTML, sets up behavior based on mode, attaches event listeners
+     * 
+     * @param {Object|null} mapping - Existing mapping data for edit mode, null for add mode
+     * @param {string} mapping.description - Transaction description to match
+     * @param {string} mapping.encrypted_payee - Encrypted payee name
+     * @param {number} mapping.categoryId - Category ID for mapping
+     * @returns {Promise<HTMLElement>} Modal element
      */
     async showManualMappingModal(mapping = null) {
         const categories = await this.db.getAllCategories();
@@ -79,6 +117,7 @@ export class MappingsForm {
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         const modal = document.getElementById('manual-mapping-modal');
         
+        // EVENT LISTENER TIMING: Attach AFTER innerHTML to ensure DOM elements exist
         this.setupModalBehavior(modal, isEdit, mapping);
         
         if (mapping && mapping.encrypted_payee) {
@@ -244,6 +283,16 @@ export class MappingsForm {
 
     /**
      * Save mapping from form
+     * Validates inputs, encrypts data, stores to database, and refreshes mappings list
+     * 
+     * ENCRYPTION LOGIC:
+     * - Category name is encrypted (or "Transfer" for transfer type)
+     * - Payee name is encrypted if provided, empty string otherwise
+     * - Description is stored as plain text (used as lookup key)
+     * 
+     * @param {Array<Object>} categories - All categories for validation
+     * @param {Object|null} mapping - Original mapping data (for edit mode)
+     * @returns {Promise<void>}
      */
     async saveMappingFromForm(categories, mapping) {
         const description = document.getElementById('mapping-description').value.trim();
@@ -295,6 +344,9 @@ export class MappingsForm {
 
     /**
      * Toggle FAB menu
+     * Shows/hides FAB action menu for mappings
+     * 
+     * @returns {void}
      */
     toggleMappingFabMenu() {
         const menu = document.getElementById('fab-mapping-menu');

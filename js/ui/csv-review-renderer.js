@@ -1,10 +1,33 @@
 /**
- * CSV Review Renderer - Handles HTML generation and list building for CSV import review
+ * CSVReviewRenderer - CSV Import Review Rendering Engine
  * 
- * @module CSVReviewRenderer
+ * RESPONSIBILITIES:
+ * - Generate review page HTML structure
+ * - Build transaction list with auto-mapping indicators
+ * - Render search/filter controls
+ * - Display duplicate detection status
+ * - Format amounts based on category type (income/expense)
+ * - Show auto-categorization and payee suggestions
+ * 
+ * RENDERING FEATURES:
+ * - Color-coded amounts (income green, expense red)
+ * - Auto-mapping status badges ("Auto" vs "Un-mapped")
+ * - Duplicate detection warnings
+ * - Advanced filter panel with collapsible sections
+ * - Real-time visible count updates
+ * 
+ * @class CSVReviewRenderer
+ * @module UI/CSV
+ * @layer 5 - UI Components
  */
 
 export class CSVReviewRenderer {
+    /**
+     * Initialize CSV review renderer
+     * 
+     * @param {SecurityManager} security - For decrypting category/payee names
+     * @param {DatabaseManager} db - For fetching categories and payees
+     */
     constructor(security, db) {
         this.security = security;
         this.db = db;
@@ -12,6 +35,17 @@ export class CSVReviewRenderer {
 
     /**
      * Generate main review page HTML structure
+     * Creates header, search/filter panel, review list container, and action buttons
+     * 
+     * STRUCTURE:
+     * - Header: Total count and visible count display
+     * - Search Bar: Text input with advanced filter toggle
+     * - Filter Panel: Quick filters, sort controls, advanced filters (collapsible)
+     * - Review List: Scrollable container for transaction items
+     * - Actions: Cancel and Import buttons (sticky bottom)
+     * 
+     * @param {number} processedDataLength - Total number of CSV transactions
+     * @returns {string} Complete HTML for review page
      */
     generateReviewPageHTML(processedDataLength) {
         return `
@@ -130,10 +164,23 @@ export class CSVReviewRenderer {
 
     /**
      * Build CSV review list HTML from processed data
+     * Decrypts category/payee names and renders transaction items with auto-mapping status
+     * 
+     * AUTO-MAPPING DISPLAY:
+     * - Shows "Auto (Category Name)" for auto-mapped transactions
+     * - Shows "Un-mapped" for transactions without suggestions
+     * - Uses session mappings for real-time updates during review
+     * - Displays duplicate warnings with pre-checked skip checkbox
+     * 
+     * @param {Array<Object>} processedData - CSV rows with transaction data
+     * @param {Array<Object>} allCategories - Encrypted category objects
+     * @param {Object} importSessionMappings - Description -> categoryId map for current session
+     * @returns {Promise<string>} HTML for all transaction items
      */
     async buildCSVReviewList(processedData, allCategories, importSessionMappings = {}) {
         let html = '<div class="csv-review-items">';
         
+        // STATE GUARD: Decrypt requires unlocked state
         // Decrypt category names for display
         const categoryNames = {};
         for (const cat of allCategories) {

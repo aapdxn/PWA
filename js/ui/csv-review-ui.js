@@ -1,8 +1,30 @@
 /**
- * CSV Review UI - Coordinator for CSV import review functionality
- * Delegates to specialized modules for rendering, filtering, and import handling
+ * CSVReviewUI - CSV Import Review Coordinator
  * 
- * @module CSVReviewUI
+ * WORKFLOW:
+ * 1. User uploads CSV → CSVEngine processes data
+ * 2. Opens review page with auto-mapped suggestions
+ * 3. User reviews/filters/modifies assignments
+ * 4. Imports selected transactions to database
+ * 5. Returns to previous tab with updated data
+ * 
+ * RESPONSIBILITIES:
+ * - Coordinate CSV import review workflow
+ * - Delegate rendering to CSVReviewRenderer
+ * - Delegate filtering to CSVReviewFilter
+ * - Delegate import handling to CSVReviewImportHandler
+ * - Manage import session state and mappings
+ * - Handle navigation between tabs
+ * - Attach and manage event listeners
+ * 
+ * MODULE COMPOSITION:
+ * - CSVReviewRenderer: HTML generation and list building
+ * - CSVReviewFilter: Filter/search/sort logic
+ * - CSVReviewImportHandler: Import execution and account mapping
+ * 
+ * @class CSVReviewUI
+ * @module UI/CSV
+ * @layer 5 - UI Components
  */
 
 import { CSVReviewRenderer } from './csv-review-renderer.js';
@@ -10,6 +32,14 @@ import { CSVReviewFilter } from './csv-review-filter.js';
 import { CSVReviewImportHandler } from './csv-review-import-handler.js';
 
 export class CSVReviewUI {
+    /**
+     * Initialize CSV review UI coordinator
+     * Creates specialized modules for rendering, filtering, and import handling
+     * 
+     * @param {SecurityManager} security - Web Crypto API wrapper for encryption
+     * @param {DatabaseManager} db - Dexie database interface
+     * @param {AccountMappingsUI} accountMappingsUI - Account mappings manager
+     */
     constructor(security, db, accountMappingsUI) {
         this.security = security;
         this.db = db;
@@ -29,6 +59,17 @@ export class CSVReviewUI {
 
     /**
      * Open CSV review page with processed data
+     * Builds review UI, renders transaction list with auto-mappings, and shows page
+     * 
+     * AUTO-MAPPING LOGIC:
+     * - Checks existing description mappings for suggested categories/payees
+     * - Marks duplicates based on date/amount/description
+     * - Populates session mappings for real-time updates
+     * 
+     * @param {Array<Object>} processedData - CSV rows with parsed transaction data
+     * @param {CSVEngine} csvEngine - CSV processing engine for import
+     * @param {UIManager} uiManager - Parent UI manager for tab navigation
+     * @returns {Promise<void>}
      */
     async openCSVReviewPage(processedData, csvEngine, uiManager) {
         const allCategories = await this.db.getAllCategories();
@@ -86,6 +127,7 @@ export class CSVReviewUI {
         
         document.querySelectorAll('.fab').forEach(fab => fab.classList.add('hidden'));
         
+        // EVENT LISTENER TIMING: Attach AFTER innerHTML to ensure DOM elements exist
         // Attach all event listeners
         this.attachEventListeners(csvPage, processedData, csvEngine, allCategories);
         
@@ -98,6 +140,20 @@ export class CSVReviewUI {
 
     /**
      * Attach all event listeners for CSV review page
+     * Handles back/cancel, import, search, filters, sorting, and skip actions
+     * 
+     * EVENT TYPES:
+     * - Navigation: Back, Cancel, Import
+     * - Search: Text input filtering
+     * - Quick Filters: Duplicates, Unmapped, Auto-mapped
+     * - Advanced Filters: Amount range, Date range, Sorting
+     * - Bulk Actions: Skip All Visible
+     * 
+     * @param {HTMLElement} modal - CSV review page container
+     * @param {Array<Object>} processedData - Mutable array of transaction data
+     * @param {CSVEngine} csvEngine - CSV processing engine
+     * @param {Array<Object>} allCategories - Decrypted category list for dropdowns
+     * @returns {void}
      */
     attachEventListeners(modal, processedData, csvEngine, allCategories) {
         // Back button handler
@@ -191,6 +247,9 @@ export class CSVReviewUI {
 
     /**
      * Close CSV import page and return to previous tab
+     * Restores bottom navigation, resets filter state, and navigates back
+     * 
+     * @returns {void}
      */
     closeCSVImportPage() {
         const csvPage = document.getElementById('csv-import-page');

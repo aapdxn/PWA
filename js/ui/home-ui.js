@@ -1,10 +1,52 @@
-// HomeUI - Handles home tab rendering
+/**
+ * HomeUI - Home/Dashboard tab UI with notifications
+ * 
+ * RESPONSIBILITIES:
+ * - Render home tab with app logo and notification bell
+ * - Calculate notification counts (unmapped accounts, unlinked transfers, etc.)
+ * - Display notifications modal with actionable items
+ * - Check budget balance for current month
+ * 
+ * STATE REQUIREMENTS:
+ * - Requires Unlocked state (decrypts transactions for notification counts)
+ * - Auto-mapping resolution for uncategorized count
+ * 
+ * NOTIFICATIONS:
+ * - Unmapped Accounts: Accounts without friendly names
+ * - Unlinked Transfers: Transfers without linked transaction
+ * - Uncategorized: Transactions without category (after auto-mapping)
+ * - Budget Unbalanced: Income ≠ Expenses for current month
+ * 
+ * INTEGRATION:
+ * - Shown in Transactions tab (Home is alias for Transactions)
+ * - Notification badge on bell icon
+ * 
+ * @class HomeUI
+ * @module UI/Transaction
+ * @layer 5 - UI Components
+ */
 export class HomeUI {
+    /**
+     * Create HomeUI
+     * @param {SecurityManager} security - For decrypting transaction data
+     * @param {DatabaseManager} db - For fetching transactions/mappings
+     */
     constructor(security, db) {
         this.security = security;
         this.db = db;
     }
 
+    /**
+     * Render home tab with notification bell
+     * 
+     * DISPLAY:
+     * - App logo (shield-check icon)
+     * - App name and tagline
+     * - Notification bell (top-right)
+     * - Notification badge if count > 0
+     * 
+     * LISTENERS: Attaches click handler for notifications modal
+     */
     async renderHomeTab() {
         console.log('🏠 Rendering home tab');
         const container = document.getElementById('home-content');
@@ -44,6 +86,14 @@ export class HomeUI {
         }
     }
 
+    /**
+     * Attach event listeners for home tab
+     * 
+     * LISTENERS:
+     * - Notifications button: Opens notifications modal
+     * 
+     * TIMING: Called after renderHomeTab inserts HTML
+     */
     attachHomeEventListeners() {
         const notificationsBtn = document.getElementById('notifications-btn');
         if (notificationsBtn) {
@@ -54,6 +104,10 @@ export class HomeUI {
         }
     }
 
+    /**
+     * Get total notification count for badge display
+     * @returns {Promise<number>} Total notification count
+     */
     async getNotificationCount() {
         const notifications = await this.getNotifications();
         return notifications.unmappedAccountsCount + 
@@ -62,6 +116,20 @@ export class HomeUI {
                (notifications.budgetUnbalanced ? 1 : 0);
     }
 
+    /**
+     * Calculate all notification counts and details
+     * 
+     * @returns {Promise<Object>} Notification data
+     * 
+     * CALCULATIONS:
+     * - Unmapped Accounts: Accounts without encrypted_name in mappings
+     * - Unlinked Transfers: Transfers without linkedTransactionId
+     * - Uncategorized: Transactions without categoryId (after auto-mapping resolution)
+     * - Budget Unbalanced: |Income - Expenses| > $0.01 for current month
+     * 
+     * STATE: Requires Unlocked (decrypts all transactions)
+     * PERFORMANCE: May be slow for 150+ transactions
+     */
     async getNotifications() {
         const notifications = {
             unmappedAccountsCount: 0,
@@ -80,6 +148,7 @@ export class HomeUI {
             const categories = await this.db.getAllCategories();
             const mappings = await this.db.getAllMappingsDescriptions();
 
+            // STATE GUARD: Decrypt requires unlocked state
             // Collect unmapped account numbers
             const accountNumbers = new Set();
             for (const tx of transactions) {
@@ -197,6 +266,20 @@ export class HomeUI {
         return notifications;
     }
 
+    /**
+     * Show notifications modal with actionable items
+     * 
+     * DISPLAY:
+     * - List of notifications with icons
+     * - Empty state if no notifications
+     * - Close button and overlay click to dismiss
+     * 
+     * ICONS:
+     * - credit-card: Unmapped accounts
+     * - arrow-left-right: Unlinked transfers
+     * - tag: Uncategorized transactions
+     * - trending-up/down: Budget surplus/deficit
+     */
     async showNotificationsModal() {
         const notifications = await this.getNotifications();
         

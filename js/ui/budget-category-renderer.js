@@ -1,10 +1,52 @@
 /**
- * Budget Category Renderer - Handles budget list rendering and display
+ * BudgetCategoryRenderer - Category List Display & Rendering
  * 
- * @module BudgetCategoryRenderer
+ * RESPONSIBILITIES:
+ * - Render budget category list with progress tracking
+ * - Group categories by type (Income, Expense, Saving)
+ * - Calculate and display budget progress for current month
+ * - Render FAB menu for budget actions
+ * - Handle empty states
+ * 
+ * CATEGORY TYPE GROUPING:
+ * - Income: Green header/cards, shows income budgets
+ * - Expense: Red header/cards, shows expense budgets
+ * - Saving: Blue header/cards, shows saving goals
+ * - Transfer: Hidden from budget view (no tracking)
+ * 
+ * PROGRESS CALCULATIONS:
+ * - Tracked: Sum of absolute transaction amounts for category in current month
+ * - Remaining: Budget limit - Tracked amount
+ * - Percentage: (Tracked / Limit) * 100, capped at 100% for display
+ * - Over-budget: Red progress bar when tracked > limit
+ * 
+ * AMOUNT SIGN CONVENTIONS:
+ * - All amounts displayed as positive values
+ * - Tracked amounts use Math.abs() for display
+ * - Progress calculations use absolute values
+ * - Category type determines income vs expense classification
+ * 
+ * MONTHLY BUDGET INDICATORS:
+ * - Underlined amount = Has monthly override for current month
+ * - Regular amount = Using default category limit
+ * - Click amount to quick-edit monthly budget
+ * 
+ * STATE REQUIREMENTS:
+ * - Requires Unlocked state for all decrypt operations
+ * 
+ * @class BudgetCategoryRenderer
+ * @module UI/Budget
+ * @layer 5 - UI Components
  */
 
 export class BudgetCategoryRenderer {
+    /**
+     * Initialize category renderer with dependency injection
+     * 
+     * @param {SecurityManager} security - Web Crypto API wrapper for encryption/decryption
+     * @param {DatabaseManager} db - Dexie database wrapper for CRUD operations
+     * @param {BudgetMonthManager} monthManager - Month navigation manager for current month context
+     */
     constructor(security, db, monthManager) {
         this.security = security;
         this.db = db;
@@ -16,7 +58,30 @@ export class BudgetCategoryRenderer {
     }
 
     /**
-     * Render budget list for current month
+     * Render complete budget category list for current month
+     * 
+     * RENDERING PROCESS:
+     * 1. Fetch all categories from database
+     * 2. Get monthly budgets for current month
+     * 3. Decrypt category data and budget limits
+     * 4. Group categories by type (Income, Expense, Saving)
+     * 5. Calculate tracked amounts and progress for each category
+     * 6. Render grouped sections with progress bars
+     * 7. Show empty state if no categories exist
+     * 
+     * DISPLAY SECTIONS:
+     * - Month navigation header (sticky)
+     * - Income categories (green cards)
+     * - Expense categories (red cards)
+     * - Saving categories (blue cards)
+     * - Transfer categories excluded from display
+     * 
+     * MONTHLY BUDGET LOGIC:
+     * - Uses monthly budget if set for current month
+     * - Falls back to 0 if no monthly budget exists
+     * - Monthly overrides indicated with underline
+     * 
+     * @returns {Promise<void>}
      */
     async renderBudgetList() {
         const container = document.getElementById('budget-list');
@@ -62,6 +127,7 @@ export class BudgetCategoryRenderer {
         const monthlyBudgets = await this.db.getCategoryBudgetsForMonth(this.monthManager.currentMonth);
         const decryptedCategories = await Promise.all(
             categories.map(async (cat) => {
+                // STATE GUARD: Decrypt requires unlocked state
                 // Only use monthly budget - no default fallback
                 const monthlyBudget = monthlyBudgets.find(mb => mb.categoryId === cat.id);
                 const limit = monthlyBudget 
@@ -167,7 +233,16 @@ export class BudgetCategoryRenderer {
     }
 
     /**
-     * Render FAB menu for budget actions
+     * Render floating action button (FAB) menu for budget actions
+     * 
+     * MENU ITEMS:
+     * - Add Category: Create new budget category
+     * - Copy from Month: Bulk copy budgets from another month
+     * 
+     * FAB BEHAVIOR:
+     * - Click FAB to toggle menu visibility
+     * - Click outside to close menu
+     * - Menu items trigger corresponding actions
      */
     renderFABMenu() {
         const container = document.getElementById('budget-list');
@@ -197,7 +272,14 @@ export class BudgetCategoryRenderer {
     }
 
     /**
-     * Attach FAB menu event listeners
+     * Attach event listeners to FAB menu
+     * 
+     * LISTENERS:
+     * - FAB button: Toggle menu visibility
+     * - Document click: Close menu when clicking outside
+     * - Copy Month button: Trigger copy from month modal
+     * 
+     * @param {Function} onCopyMonthClick - Callback when "Copy from Month" is clicked
      */
     attachFABListeners(onCopyMonthClick) {
         const fabBtn = document.getElementById('fab-budget');

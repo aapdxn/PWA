@@ -1,6 +1,25 @@
-// ui-helpers.js - Shared utility functions for UI modules
-// This module contains common functions used across multiple UI components
-// to reduce code duplication and maintain consistency
+/**
+ * UIHelpers - Shared Utility Functions for UI Modules
+ * 
+ * Contains common functions used across multiple UI components to reduce
+ * code duplication and maintain consistency. Includes transaction decryption,
+ * formatting utilities, auto-mapping resolution, and UI helpers.
+ * 
+ * CORE FUNCTIONS:
+ * - decryptTransaction: Decrypt and enrich single transaction
+ * - resolveAutoCategory/resolveAutoPayee: Auto-mapping resolution
+ * - formatCurrency/formatDateYYYYMMDD: Display formatting
+ * - showToast/initIcons: UI utilities
+ * - debounce/deepClone: General utilities
+ * 
+ * DEPENDENCIES:
+ * - SecurityManager: For decryption operations
+ * - DatabaseManager: For category/payee lookups
+ * - Lucide: For icon rendering
+ * 
+ * @module Core/UIHelpers
+ * @layer 3 - Core Services
+ */
 
 /**
  * Get category name from categoryId, handling Transfer and missing categories
@@ -32,6 +51,7 @@ export async function resolveAutoCategory(transaction, description, categories, 
     if (transaction.useAutoCategory) {
         const mapping = mappings.find(m => m.description === description);
         if (mapping && mapping.encrypted_category) {
+            // STATE GUARD: Decrypt requires unlocked state
             const categoryName = await security.decrypt(mapping.encrypted_category);
             if (categoryName === 'Transfer') {
                 categoryId = null; // Transfer type
@@ -69,6 +89,7 @@ export async function resolveAutoPayee(transaction, description, payees, mapping
     if (transaction.useAutoPayee) {
         const mapping = mappings.find(m => m.description === description);
         if (mapping && mapping.encrypted_payee) {
+            // STATE GUARD: Decrypt requires unlocked state
             const payeeName = await security.decrypt(mapping.encrypted_payee);
             if (payeeName) {
                 // Find payee by decrypting names
@@ -89,6 +110,9 @@ export async function resolveAutoPayee(transaction, description, payees, mapping
 
 /**
  * Decrypt and enrich a single transaction with all related data
+ * 
+ * STATE GUARD: Decrypt requires unlocked state
+ * 
  * @param {Object} transaction - Raw encrypted transaction
  * @param {Object} context - { security, categories, payees, mappings, accountMappingsUI }
  * @returns {Promise<Object>} Fully decrypted transaction with resolved relationships
@@ -156,8 +180,13 @@ export async function decryptTransaction(transaction, context) {
 
 /**
  * Format a date as YYYY-MM-DD
- * @param {Date|string} date - Date to format
- * @returns {string} Formatted date string
+ * 
+ * @param {Date|string} date - Date to format (Date object or date string)
+ * @returns {string} Formatted date string (YYYY-MM-DD)
+ * 
+ * @example
+ * formatDateYYYYMMDD(new Date('2024-12-30'))
+ * // Returns: '2024-12-30'
  */
 export function formatDateYYYYMMDD(date) {
     const d = typeof date === 'string' ? new Date(date) : date;
@@ -169,9 +198,17 @@ export function formatDateYYYYMMDD(date) {
 
 /**
  * Format currency amount with proper sign and formatting
+ * 
+ * Formats numbers as USD currency with thousand separators and 2 decimal places.
+ * Handles negative amounts with proper sign placement.
+ * 
  * @param {number} amount - Amount to format
- * @param {boolean} forcePositive - Always show as positive
- * @returns {string} Formatted currency string
+ * @param {boolean} [forcePositive=false] - Always show as positive (ignore sign)
+ * @returns {string} Formatted currency string (e.g., '$1,234.56' or '-$50.00')
+ * 
+ * @example
+ * formatCurrency(-50.00)  // Returns: '-$50.00'
+ * formatCurrency(-50.00, true)  // Returns: '$50.00'
  */
 export function formatCurrency(amount, forcePositive = false) {
     const absAmount = Math.abs(amount);
@@ -189,9 +226,18 @@ export function formatCurrency(amount, forcePositive = false) {
 
 /**
  * Get amount class (income/expense) based on category type and amount
+ * 
+ * Determines CSS class for styling transaction amounts. For categorized
+ * transactions, uses category type. For Transfer/Uncategorized, uses amount sign.
+ * 
  * @param {number} amount - Transaction amount
  * @param {string} categoryType - 'Income', 'Expense', 'Transfer', or 'Uncategorized'
  * @returns {string} CSS class name ('income' or 'expense')
+ * 
+ * @example
+ * getAmountClass(50.00, 'Income')  // Returns: 'income'
+ * getAmountClass(-50.00, 'Expense')  // Returns: 'expense'
+ * getAmountClass(-50.00, 'Transfer')  // Returns: 'expense' (uses sign)
  */
 export function getAmountClass(amount, categoryType) {
     if (categoryType === 'Income') return 'income';
@@ -202,7 +248,15 @@ export function getAmountClass(amount, categoryType) {
 
 /**
  * Initialize Lucide icons in a container
- * @param {HTMLElement} container - Container element to initialize icons in
+ * 
+ * Triggers Lucide icon replacement for all icon elements within the specified
+ * container. Call after dynamically inserting HTML with icon elements.
+ * 
+ * @param {HTMLElement} [container=document] - Container element to initialize icons in
+ * 
+ * @example
+ * element.innerHTML = '<i data-lucide="check"></i>';
+ * initIcons(element);
  */
 export function initIcons(container = document) {
     if (typeof window.loadIcons === 'function') {
@@ -214,9 +268,17 @@ export function initIcons(container = document) {
 
 /**
  * Show a temporary toast notification
+ * 
+ * Displays a temporary notification message at the bottom of the screen.
+ * Auto-dismisses after specified duration.
+ * 
  * @param {string} message - Message to display
- * @param {string} type - 'success', 'error', 'warning', or 'info'
- * @param {number} duration - Duration in milliseconds (default: 3000)
+ * @param {string} [type='info'] - Toast type: 'success', 'error', 'warning', or 'info'
+ * @param {number} [duration=3000] - Duration in milliseconds before auto-dismiss
+ * 
+ * @example
+ * showToast('Transaction saved!', 'success');
+ * showToast('Invalid amount', 'error', 5000);
  */
 export function showToast(message, type = 'info', duration = 3000) {
     // TODO: Implement proper toast component
@@ -251,9 +313,18 @@ export function showToast(message, type = 'info', duration = 3000) {
 
 /**
  * Debounce function execution
+ * 
+ * Creates a debounced version of the provided function that delays execution
+ * until after the specified wait time has elapsed since the last invocation.
+ * Useful for limiting rate of execution (e.g., search input handlers).
+ * 
  * @param {Function} func - Function to debounce
  * @param {number} wait - Wait time in milliseconds
  * @returns {Function} Debounced function
+ * 
+ * @example
+ * const debouncedSearch = debounce(searchFunction, 300);
+ * input.addEventListener('input', debouncedSearch);
  */
 export function debounce(func, wait) {
     let timeout;
@@ -269,8 +340,17 @@ export function debounce(func, wait) {
 
 /**
  * Deep clone an object
- * @param {any} obj - Object to clone
- * @returns {any} Cloned object
+ * 
+ * Creates a deep copy of an object using JSON serialization.
+ * Note: This method does not preserve functions, symbols, or undefined values.
+ * 
+ * @param {any} obj - Object to clone (must be JSON-serializable)
+ * @returns {any} Deep cloned copy of the object
+ * 
+ * @example
+ * const original = { a: 1, b: { c: 2 } };
+ * const copy = deepClone(original);
+ * copy.b.c = 3;  // Does not affect original
  */
 export function deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));

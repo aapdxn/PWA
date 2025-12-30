@@ -1,15 +1,74 @@
-// ModalManager - Generic modal utilities and category resolution
+/**
+ * ModalManager - Centralized modal system for user prompts and data resolution
+ * 
+ * Provides reusable modal dialogs for CSV format selection, category resolution,
+ * and other user decision flows. Manages modal lifecycle (create, display, cleanup)
+ * and user interaction handling.
+ * 
+ * RESPONSIBILITIES:
+ * - Display CSV format selection modal with radio button options
+ * - Handle unmapped category resolution during CSV import
+ * - Allow users to map to existing categories or create new ones
+ * - Manage modal DOM creation, event binding, and cleanup
+ * - Return structured data from modal interactions
+ * 
+ * DEPENDENCIES:
+ * - SecurityManager: Decrypt category names for display
+ * - DatabaseManager: Fetch categories, create new categories
+ * - csv-formats.js: Get list of supported CSV formats
+ * 
+ * MODAL LIFECYCLE:
+ * 1. Create modal HTML with insertAdjacentHTML
+ * 2. Attach event listeners to modal buttons
+ * 3. Return Promise that resolves with user selection
+ * 4. Remove modal from DOM after interaction
+ * 5. Resolve/reject Promise based on user action
+ * 
+ * RETURN PATTERNS:
+ * - Returns null if user cancels
+ * - Returns selected value/object on confirmation
+ * - Validates selections before allowing confirmation
+ * 
+ * @class ModalManager
+ * @module UI/Modals
+ * @layer 5 - UI Components
+ */
 import { getFormatList } from '../core/csv-formats.js';
 
 export class ModalManager {
+    /**
+     * Creates ModalManager instance for modal operations
+     * 
+     * @param {SecurityManager} security - For decrypting category names
+     * @param {DatabaseManager} db - For fetching/creating categories
+     */
     constructor(security, db) {
         this.security = security;
         this.db = db;
     }
 
     /**
-     * Show CSV format selection modal
-     * Returns: formatId (string) or null if cancelled
+     * Display CSV format selection modal and return user choice
+     * 
+     * Shows radio button list of all supported CSV formats from csv-formats.js.
+     * First option is auto-selected. Returns selected format ID or null if cancelled.
+     * 
+     * INTERACTION FLOW:
+     * 1. Fetch available formats from getFormatList()
+     * 2. Create modal with radio buttons for each format
+     * 3. Auto-select first format
+     * 4. Highlight selected option with border/background
+     * 5. Wait for user to confirm or cancel
+     * 6. Return formatId string or null
+     * 7. Remove modal from DOM
+     * 
+     * VISUAL FEEDBACK:
+     * - Selected option: primary border color + secondary background
+     * - Hover effect: border color change
+     * - Validation: Alert if no selection (shouldn't happen with auto-select)
+     * 
+     * @async
+     * @returns {Promise<string|null>} Selected format ID (e.g., 'chase', 'wellsfargo') or null if cancelled
      */
     async showCSVFormatModal() {
         const formats = getFormatList();
@@ -105,8 +164,36 @@ export class ModalManager {
     }
 
     /**
-     * Show category resolution modal for unmapped categories
-     * Returns: { [categoryName]: { categoryId, isNew } } or null if cancelled
+     * Display category resolution modal for unmapped categories during CSV import
+     * 
+     * When importing transactions with categories not in the user's budget, this
+     * modal lets them choose to either map to existing categories or create new ones.
+     * Each unmapped category gets two radio options: map to existing or create new.
+     * 
+     * INTERACTION FLOW:
+     * 1. Fetch all existing budget categories from database
+     * 2. Create modal with list of unmapped categories
+     * 3. For each category, provide two options:
+     *    a. Map to existing category (dropdown of current categories)
+     *    b. Create new category (select Expense/Income/Saving type)
+     * 4. Validate all selections before allowing confirmation
+     * 5. Create any new categories in database
+     * 6. Return mapping object with categoryId for each unmapped name
+     * 
+     * RADIO BUTTON BEHAVIOR:
+     * - "Map to existing" (default): Enables existing category dropdown
+     * - "Create new": Enables type dropdown, disables category dropdown
+     * - If no existing categories: Auto-select "create new" and disable map option
+     * 
+     * RETURN FORMAT:
+     * {
+     *   "Groceries": { categoryId: 5, isNew: false },
+     *   "Coffee Shops": { categoryId: 12, isNew: true, type: "Expense" }
+     * }
+     * 
+     * @async
+     * @param {string[]} unmappedCategories - Array of category names not found in budget
+     * @returns {Promise<Object|null>} Mapping of category names to {categoryId, isNew, type?} or null if cancelled
      */
     async showCategoryResolutionModal(unmappedCategories) {
         const allCategories = await this.db.getAllCategories();
@@ -137,6 +224,7 @@ export class ModalManager {
             const modal = document.getElementById('category-resolution-modal');
             const listContainer = document.getElementById('unmapped-categories-list');
             
+            // EVENT LISTENER TIMING: Attach AFTER innerHTML to ensure DOM elements exist
             // Build list of unmapped categories
             if (!unmappedCategories || unmappedCategories.length === 0) {
                 console.error('❌ No unmapped categories provided to modal!');

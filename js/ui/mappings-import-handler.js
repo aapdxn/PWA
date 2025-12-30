@@ -1,11 +1,45 @@
 /**
- * Mappings Import Handler - CSV import and review page logic
- * Handles CSV file processing, review page, filtering, and batch import
+ * MappingsImportHandler - CSV Mappings Import & Review
  * 
- * @module MappingsImportHandler
+ * WORKFLOW:
+ * 1. User selects CSV file(s) containing mappings
+ * 2. CSVEngine processes CSV and extracts mappings
+ * 3. Show category resolution modal for unmapped categories
+ * 4. Open review page with all processed mappings
+ * 5. User filters/reviews mappings before import
+ * 6. Import selected mappings to database
+ * 7. Return to mappings tab with updated list
+ * 
+ * RESPONSIBILITIES:
+ * - Initialize CSV file input for mappings import
+ * - Process CSV files using CSVEngine
+ * - Handle category resolution for unmapped categories
+ * - Build and render mappings review page
+ * - Apply search and filter logic to review list
+ * - Execute batch import of selected mappings
+ * - Manage navigation between mappings tab and review page
+ * 
+ * CSV FORMAT SPECIFICATION:
+ * Required columns: description, category
+ * Optional columns: payee
+ * Categories must exist in database or be resolved via modal
+ * Duplicate detection based on description key
+ * 
+ * @class MappingsImportHandler
+ * @module UI/Mappings
+ * @layer 5 - UI Components
  */
 
 export class MappingsImportHandler {
+    /**
+     * Initialize mappings import handler
+     * Sets up filter state and module dependencies
+     * 
+     * @param {SecurityManager} security - For encrypting mapping data
+     * @param {DatabaseManager} db - For storing mappings
+     * @param {CSVEngine} csvEngine - CSV processing engine
+     * @param {ModalManager} modalManager - For category resolution modal
+     */
     constructor(security, db, csvEngine, modalManager) {
         this.security = security;
         this.db = db;
@@ -22,6 +56,9 @@ export class MappingsImportHandler {
 
     /**
      * Initialize CSV file input for import
+     * Creates hidden file input and attaches change event handler
+     * 
+     * @returns {void}
      */
     initializeFileInput() {
         if (!document.getElementById('import-mappings-input')) {
@@ -98,6 +135,10 @@ export class MappingsImportHandler {
 
     /**
      * Open mappings review page
+     * Builds review UI, renders mappings list, and attaches event listeners
+     * 
+     * @param {Array<Object>} processedMappings - CSV mappings with resolved category IDs
+     * @returns {Promise<void>}
      */
     async openMappingsReviewPage(processedMappings) {
         const allCategories = await this.db.getAllCategories();
@@ -355,6 +396,18 @@ export class MappingsImportHandler {
 
     /**
      * Apply mappings filters
+     * Filters mappings by search query, category, duplicates, and unmapped status
+     * Updates visible count display
+     * 
+     * FILTER LOGIC:
+     * - Search: Text match on description or payee
+     * - Categories: Multi-select filter (OR logic)
+     * - Duplicates: Hide items marked as duplicates
+     * - Unmapped: Show only items without resolved categoryId
+     * 
+     * @param {HTMLElement} modal - Mappings review page container
+     * @param {Array<Object>} processedMappings - Mappings data for filter evaluation
+     * @returns {void}
      */
     applyMappingsFilters(modal, processedMappings) {
         const searchQuery = this.mappingsSearchQuery.toLowerCase();
@@ -402,6 +455,11 @@ export class MappingsImportHandler {
 
     /**
      * Handle mappings import
+     * Filters selected mappings, encrypts data, and stores to database
+     * 
+     * @param {Array<Object>} processedMappings - All mappings from review page
+     * @returns {Promise<void>}
+     * @throws {Error} If import fails (shows alert to user)
      */
     async handleMappingsImport(processedMappings) {
         const toImport = processedMappings.filter(item => !item.skip && !item.isDuplicate);
@@ -427,6 +485,9 @@ export class MappingsImportHandler {
 
     /**
      * Close mappings import page
+     * Hides review page, restores bottom navigation, and returns to mappings tab
+     * 
+     * @returns {void}
      */
     closeMappingsImportPage() {
         const mappingsPage = document.getElementById('csv-import-page');

@@ -1,12 +1,37 @@
-// transaction-ui.js - Transaction UI Coordinator (Delegates to specialized modules)
-// Refactored from 2,356 lines → ~600 lines (Phase 1: Renderer, Select Manager, Templates extracted)
-
-import { CustomSelect } from './custom-select.js';
-import { TransactionRenderer } from './transaction-renderer.js';
-import { TransactionSelectManager } from './transaction-select-manager.js';
-import { formatDateYYYYMMDD } from '../core/ui-helpers.js';
-
+/**
+ * TransactionUI - Main transaction CRUD UI coordinator
+ * 
+ * RESPONSIBILITIES:
+ * - Coordinates transaction display, editing, and deletion
+ * - Manages transaction modal lifecycle (add/edit forms)
+ * - Handles bulk selection and operations (category/payee changes, auto-linking)
+ * - Delegates rendering to TransactionRenderer
+ * - Delegates select dropdowns to TransactionSelectManager
+ * - Manages search, filter, sort state
+ * - Implements undo/redo functionality for additions
+ * - Handles transfer linking/unlinking logic
+ * 
+ * STATE REQUIREMENTS:
+ * - Requires Unlocked state for all operations (decrypt/encrypt)
+ * - Uses class properties for UI state persistence (not local variables)
+ * - Maintains selection mode state across re-renders
+ * 
+ * ARCHITECTURE:
+ * - Refactored from 2,356 lines → ~600 lines (extracted Renderer, Select Manager, Templates)
+ * - Event listeners attached AFTER innerHTML insertion (dynamic elements)
+ * - Category-aware amount signing (Income=positive, Expense/Saving=negative)
+ * 
+ * @class TransactionUI
+ * @module UI/Transaction
+ * @layer 5 - UI Components
+ */
 export class TransactionUI {
+    /**
+     * Create TransactionUI coordinator
+     * @param {SecurityManager} security - Web Crypto API manager for encryption/decryption
+     * @param {DatabaseManager} db - Dexie.js database manager
+     * @param {AccountMappingsUI} accountMappingsUI - Account display name resolver
+     */
     constructor(security, db, accountMappingsUI) {
         this.security = security;
         this.db = db;
@@ -46,11 +71,25 @@ export class TransactionUI {
         this.uiManager = null;
     }
     
-    // Delegate cache clearing to renderer
+    /**
+     * Clear decrypted transaction cache
+     * Delegates to TransactionRenderer
+     * Called after any data mutation (save/delete)
+     */
     clearCache() {
         this.renderer.clearCache();
     }
 
+    /**
+     * Render transactions tab with pagination and filtering
+     * CRITICAL: Event listeners attached AFTER rendering completes
+     * 
+     * @param {boolean} loadMore - If true, append to existing list (pagination)
+     * @returns {Promise<Object>} Result with total, visible, showing counts
+     * 
+     * STATE: Requires Unlocked (decrypts all transactions)
+     * LISTENERS: Attaches dynamically based on selectionMode
+     */
     async renderTransactionsTab(loadMore = false) {
         const result = await this.renderer.render({
             loadMore,
@@ -84,7 +123,16 @@ export class TransactionUI {
         return result;
     }
 
+    /**
+     * Attach click listeners to transaction items
+     * Opens transaction modal for edit
+     * Handles merged transfer display (asks which side to edit)
+     * 
+     * TIMING: Called AFTER renderTransactionsTab inserts HTML
+     * PATTERN: Event delegation for dynamic elements
+     */
     attachTransactionClickListeners() {
+        // EVENT LISTENER TIMING: Attach AFTER innerHTML to ensure DOM elements exist
         const items = document.querySelectorAll('.transaction-item');
         items.forEach(item => {
             item.addEventListener('click', async (e) => {
@@ -108,6 +156,20 @@ export class TransactionUI {
         });
     }
 
+    /**
+     * Open transaction modal for add or edit
+     * 
+     * @param {number|null} transactionId - Transaction to edit, or null for new
+     * 
+     * WORKFLOW:
+     * 1. Initialize custom selects (category, payee, link)
+     * 2. Load transaction data if editing
+     * 3. Populate dropdowns with auto-mapping indicators
+     * 4. Setup description change listener
+     * 
+     * STATE: Requires Unlocked (decrypts transaction data)
+     * ENCRYPTION: Decrypts all fields for display
+     */
     async openTransactionModal(transactionId = null) {
         console.log('💵 Opening transaction modal, ID:', transactionId);
         
@@ -139,6 +201,21 @@ export class TransactionUI {
         this.selectManager.setupDescriptionChangeListener();
     }
 
+    /**
+     * Load transaction data into edit form
+     * 
+     * @param {number} transactionId - Transaction ID to load
+     * @param {HTMLFormElement} form - Transaction form element
+     * 
+     * FEATURES:
+     * - Displays signed amount with indicator (+/−)
+     * - Shows account display name instead of number
+     * - Handles Transfer type (shows link field)
+     * - Handles AUTO category/payee selections
+     * - Shows delete button
+     * 
+     * STATE: Requires Unlocked (decrypts all fields)
+     */
     async loadTransactionForEdit(transactionId, form) {
         const transactions = await this.db.getAllTransactions();
         const transaction = transactions.find(t => t.id === transactionId);
@@ -148,6 +225,7 @@ export class TransactionUI {
             return;
         }
         
+        // STATE GUARD: Decrypt requires unlocked state
         const date = await this.security.decrypt(transaction.encrypted_date);
         const signedAmount = parseFloat(await this.security.decrypt(transaction.encrypted_amount));
         const amount = Math.abs(signedAmount);
@@ -259,6 +337,17 @@ export class TransactionUI {
         }
     }
 
+    /**
+     * Setup form for adding new transaction
+     * 
+     * @param {HTMLFormElement} form - Transaction form element
+     * 
+     * FEATURES:
+     * - Sets today's date as default
+     * - Populates category/payee dropdowns
+     * - Hides link field (not Transfer by default)
+     * - Hides delete button
+     */
     async setupNewTransactionForm(form) {
         document.getElementById('transaction-modal-title').textContent = 'Add Transaction';
         form.reset();
@@ -291,6 +380,23 @@ export class TransactionUI {
         }
     }
 
+    /**
+     * Save transaction (add or edit)
+     * 
+     * @param {Function} onSuccess - Callback after successful save
+     * 
+     * CRITICAL LOGIC:
+     * - Category-aware amount signing:
+     *   - Income: positive amount
+     *   - Expense/Saving: negative amount
+     * - AUTO category/payee: Sets useAuto flags, nullifies IDs
+     * - Transfer: Sets encrypted_linkedTransactionId field
+     * - Auto-creates account mapping if new account
+     * 
+     * ENCRYPTION: Encrypts all fields before save
+     * STATE: Requires Unlocked
+     * POST-SAVE: Clears cache, calls onSuccess callback
+     */
     async saveTransaction(onSuccess) {
         console.log('💾 Saving transaction...');
         
@@ -342,6 +448,7 @@ export class TransactionUI {
                 payeeId = parseInt(payeeValue);
             }
             
+            // SECURITY: Encrypt all fields before database storage
             const transaction = {
                 encrypted_date: await this.security.encrypt(date),
                 encrypted_amount: await this.security.encrypt(signedAmount.toString()),
@@ -396,6 +503,19 @@ export class TransactionUI {
         }
     }
 
+    /**
+     * Handle transfer linking/unlinking logic
+     * Bidirectional linking: both transactions reference each other
+     * 
+     * @param {number} transactionId - Current transaction ID
+     * @param {string|null} linkedTransactionId - New linked transaction ID
+     * @param {HTMLFormElement} form - Form with originalLinkedId data attribute
+     * 
+     * SCENARIOS:
+     * 1. Unlinking: Clear both sides of link
+     * 2. Linking new: Set both sides, unlink old if switching
+     * 3. No change: No action
+     */
     async handleTransferLinking(transactionId, linkedTransactionId, form) {
         const wasLinkedTo = form.dataset.originalLinkedId;
         const isNowLinkedTo = linkedTransactionId && linkedTransactionId !== '' ? linkedTransactionId : null;
@@ -428,6 +548,15 @@ export class TransactionUI {
         }
     }
 
+    /**
+     * Delete transaction with confirmation
+     * 
+     * @param {number} transactionId - Transaction to delete
+     * @param {Function} onSuccess - Callback after successful delete
+     * 
+     * TRANSFER HANDLING: Unlinks paired transaction if linked
+     * POST-DELETE: Clears cache, calls onSuccess
+     */
     async deleteTransaction(transactionId, onSuccess) {
         const confirmed = confirm('Delete this transaction?');
         if (!confirmed) return;
@@ -601,6 +730,7 @@ export class TransactionUI {
                 }
             };
             
+            // EVENT LISTENER TIMING: Attach AFTER innerHTML to ensure DOM elements exist
             item.addEventListener('touchstart', startPress);
             item.addEventListener('touchend', cancelPress);
             item.addEventListener('touchmove', cancelPress);
@@ -610,6 +740,15 @@ export class TransactionUI {
         });
     }
 
+    /**
+     * Enter bulk selection mode
+     * Triggered by long press on transaction
+     * 
+     * @param {number|null} initialId - First transaction to select
+     * 
+     * STATE: Sets selectionMode=true, clears previous selections
+     * RENDER: Re-renders with checkboxes and selection toolbar
+     */
     async enterSelectionMode(initialId = null) {
         this.selectionMode = true;
         this.selectedTransactionIds.clear();
@@ -617,12 +756,30 @@ export class TransactionUI {
         await this.renderTransactionsTab();
     }
 
+    /**
+     * Exit bulk selection mode
+     * Returns to normal transaction display
+     * 
+     * STATE: Sets selectionMode=false, clears selections
+     */
     async exitSelectionMode() {
         this.selectionMode = false;
         this.selectedTransactionIds.clear();
         await this.renderTransactionsTab();
     }
 
+    /**
+     * Auto-link selected transfers to matching transactions
+     * 
+     * MATCHING CRITERIA:
+     * - Same absolute amount
+     * - Different accounts
+     * - Within 10 days
+     * - Not already linked
+     * - Exactly one match (skips if 0 or multiple matches)
+     * 
+     * RESULT: Shows summary of linked/skipped counts
+     */
     async autoLinkSelectedTransfers() {
         const confirmed = confirm('Auto-link selected transfers?\\n\\nThis will attempt to link each unlinked transfer to a matching transaction if there is exactly one match.');
         if (!confirmed) return;
@@ -727,6 +884,19 @@ export class TransactionUI {
         return matches;
     }
 
+    /**
+     * Attach event listeners for bulk selection mode
+     * TIMING: Called AFTER renderTransactionsTab inserts selection UI
+     * 
+     * @param {Array} filteredTransactions - Currently visible transactions
+     * 
+     * LISTENERS:
+     * - Cancel: Exit selection mode
+     * - Select All: Add all visible to selection
+     * - Auto-link: Link selected transfers
+     * - Checkboxes: Toggle individual selections
+     * - Apply: Bulk category/payee change
+     */
     async attachBulkSelectionListeners(filteredTransactions) {
         // Populate category dropdown
         const bulkCategorySelect = document.getElementById('bulk-category-select');
